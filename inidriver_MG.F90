@@ -116,12 +116,13 @@ integer :: error
 
     !> MGCAMB MOD START: reading models and params
     model = Ini_Read_Int('model',0)
-    write(*,*) "---------------------"
-    write(*,*) "Model : ", model
-    write(*,*) "---------------------"
     GRtrans= Ini_Read_Double('GRtrans',0.d0)
 
     if ( model /= 0 ) call print_MGCAMB_header
+
+    write(*,*) "---------------------"
+    write(*,*) "Model : ", model
+    write(*,*) "---------------------"
 
     if (model ==1) then
         B1= Ini_Read_Double('B1',0.d0)
