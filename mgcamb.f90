@@ -11,13 +11,14 @@ module MGCAMB
     real(dl) :: beta0, xi0, DilR, DilS, A_2 !< for model 8 and 10 (dilaton)
     real(dl) :: F_R0, FRn                   !< for model 9 (large curvature f(R))
 
-    character(len=(10)) :: MGCAMB_version = 'v3.0'
+    character(len=(10)) :: MGCAMB_version = 'v 3.0'
 
 
     ! define the type MGCAMB_par_cache
     type :: MGCAMB_parameter_cache
         real(dl) :: omegab
         real(dl) :: omegac
+        real(dl) :: omegav
         real(dl) :: h0
         real(dl) :: h0_Mpc
     end type MGCAMB_parameter_cache
@@ -30,6 +31,8 @@ module MGCAMB
         ! 1. Background quantities
         real(dl) :: adotoa
         real(dl) :: Hdot
+        real(dl) :: grho
+        real(dl) :: gpres
         real(dl) :: grhob_t
         real(dl) :: grhoc_t
         real(dl) :: grhog_t
@@ -45,7 +48,10 @@ module MGCAMB
         real(dl) :: pidot_sum
         real(dl) :: dgpi_w_sum
         real(dl) :: dgpi
+        real(dl) :: dgpi_diff
+        real(dl) :: dgpidot
         real(dl) :: rhoDelta
+        real(dl) :: rhoDeltadot
 
         ! 3. MG functions
         real(dl) :: mu
@@ -64,13 +70,15 @@ module MGCAMB
         real(dl) :: etak
         real(dl) :: etadot
 
-        !> 5. ISW realted quantities
+        !> 5. ISW and lensing realted quantities
         real(dl) :: MG_alpha
+        real(dl) :: MG_alphadot
         real(dl) :: MG_phi
         real(dl) :: MG_phidot
         real(dl) :: MG_psi
         real(dl) :: MG_psidot
         real(dl) :: MG_ISW
+        real(dl) :: MG_lensing
 
     end type MGCAMB_timestep_cache
 
@@ -107,7 +115,7 @@ contains
             mg_cache%rdot   = 0.d0
 
         else if ( model == 2 .or. &
-                  model == 3 ) then)
+                  model == 3 ) then
 
             mg_cache%q      = MGCAMB_Q( a, mg_par_cache, mg_cache )
             mg_cache%qdot   = MGCAMB_Qdot( a, mg_par_cache, mg_cache )
@@ -206,7 +214,8 @@ contains
             term2 = mg_cache%k2*mg_cache%MG_alpha* (mg_cache%mu* mg_cache%gamma- 1.d0)*(mg_cache%grhoc_t+mg_cache%grhob_t&
                     & +(4.d0/3.d0)*(mg_cache%grhog_t+mg_cache%grhor_t) + (mg_cache%grhonu_t + mg_cache%gpresnu_t) )
 
-            term3= (mg_cache%mu * ( mg_cache%gamma -1.d0)* mg_cache%adotoa - mg_cache%gamma*mg_cache%mudot - mg_cache%gammadot*mg_cache%mu )*mg_cache%rhoDelta
+            term3= (mg_cache%mu * ( mg_cache%gamma -1.d0)* mg_cache%adotoa - mg_cache%gamma*mg_cache%mudot &
+                    & - mg_cache%gammadot*mg_cache%mu )*mg_cache%rhoDelta
 
             ! typo corrected here
             term4 = 2.d0*mg_cache%mu*(mg_cache%gamma - 1.d0)*mg_cache%adotoa*mg_cache%dgpi_w_sum
@@ -229,23 +238,25 @@ contains
             !> calculate the curvature perturbation potential
             mg_cache%MG_phi = mg_cache%gamma * mg_cache%MG_psi + mg_cache%mu* 1.d0*mg_cache%dgpi/mg_cache%k2
 
-            mg_cache%MG_phidot = mg_cache%etadot - mg_cache%adotoa * (mg_cache%MG_psi - mg_cache%adotoa * mg_cache%MG_alpha)- mg_cache%Hdot * mg_cache%MG_alpha
+            mg_cache%MG_phidot = mg_cache%etadot - mg_cache%adotoa * (mg_cache%MG_psi - mg_cache%adotoa * mg_cache%MG_alpha) &
+                                & - mg_cache%Hdot * mg_cache%MG_alpha
 
         else if ( model == 2 .or. &
-                model == 3 ) then
+                  model == 3 ) then
 
             ! adding massive neutrinos contributions
-            fQ=mg_cache%k2+0.5d0*mg_cache%q*(3.d0*(grhob_t+grhoc_t)+4.d0*(grhor_t+grhog_t)+3.d0*(MG_grhonu + MG_gpresnu))
+            fQ = mg_cache%k2 + 0.5d0*mg_cache%q * (3.d0*(mg_cache%grhob_t+mg_cache%grhoc_t)+&
+                & 4.d0*(mg_cache%grhor_t+mg_cache%grhog_t)+3.d0*(mg_cache%grhonu_t + mg_cache%gpresnu_t))
 
             ! fixed for w_DE /= -1
             f1=mg_cache%k2+1.5d0*( mg_cache%adotoa**2 - mg_cache%Hdot )
 
             k2alpha= mg_cache%k * mg_cache%sigma
 
-            term1 = mg_cacheq * f1 * mg_cache%dgq/mg_cache%k
+            term1 = mg_cache%q * f1 * mg_cache%dgq/mg_cache%k
 
-            term2 = (mg_cache%q - 1.d0) * k2alpha * ( mg_cache%grhob_t+mg_cache%grhoc_t+(4.d0/3.d0)*(mg_cache%grhor_t+grhog_t) &
-                    & + (mg_cache%grhonu_t + mg_cache%gpresnu_t) )
+            term2 = (mg_cache%q - 1.d0) * k2alpha * ( mg_cache%grhob_t+mg_cache%grhoc_t+(4.d0/3.d0) &
+                    & *(mg_cache%grhor_t+mg_cache%grhog_t) + (mg_cache%grhonu_t + mg_cache%gpresnu_t) )
 
             term3 = -( mg_cache%qdot + (mg_cache%r-1.d0) * mg_cache%q * mg_cache%adotoa) * mg_cache%rhoDelta
 
@@ -255,7 +266,8 @@ contains
 
             !calculating also ISW related quantities
             mg_cache%MG_psi     = mg_cache%r * mg_cache%MG_phi - mg_cache%q * 1.d0 * mg_cache%dgpi/mg_cache%k2
-            mg_cache%MG_phidot  = mg_cache%etadot - mg_cache%adotoa * (mg_cache%MG_psi - mg_cache%adotoa * mg_cache%MG_alpha)- mg_cache%Hdot * mg_cache%MG_alpha
+            mg_cache%MG_phidot  = mg_cache%etadot - mg_cache%adotoa * (mg_cache%MG_psi - mg_cache%adotoa * mg_cache%MG_alpha) &
+                                & - mg_cache%Hdot * mg_cache%MG_alpha
 
         end if
 
@@ -263,6 +275,68 @@ contains
         mg_cache%sigmadot = mg_cache%k * (mg_cache%MG_psi - mg_cache%adotoa * mg_cache%MG_alpha)
 
     end subroutine MGCAMB_compute_z
+
+    !---------------------------------------------------------------------------
+    !> this subroutine computes the ISW term in MG
+    subroutine MGCAMB_compute_ISW( a, mg_par_cache, mg_cache )
+        use precision
+        implicit none
+
+        real(dl) :: a   !< scale factor
+        type(MGCAMB_timestep_cache), intent(inout) :: mg_cache      !< cache containing the time-dependent quantities
+        type(MGCAMB_parameter_cache), intent(in)   :: mg_par_cache  !< cache containing the parameters
+
+        !local variables
+        real(dl) :: term0
+
+        term0 = mg_cache%k2 + 3.d0* (mg_cache%adotoa**2.d0 - mg_cache%Hdot)
+
+        !adding MG_rhoDeltadot
+        mg_cache%rhoDeltadot = -term0 * mg_cache%dgq/mg_cache%k - (mg_cache%grho + mg_cache%gpres)* mg_cache%k*mg_cache%z &
+                            & - mg_cache%adotoa * mg_cache%rhoDelta - 2.d0 * mg_cache%adotoa * mg_cache%dgpi
+
+        !adding dgpidot
+        mg_cache%dgpidot = mg_cache%pidot_sum - (2.d0*mg_cache%dgpi+ mg_cache%dgpi_diff )*mg_cache%adotoa
+
+        if (model==1 .or. &
+            model==4 .or. &
+            model==5 .or. &
+            model==6 .or. &
+            model==7 .or. &
+            model==8 .or. &
+            model==9 .or. &
+            model==10) then
+
+            mg_cache%MG_psidot = - 0.5d0*mg_cache%mu/mg_cache%k2*(mg_cache%rhoDeltadot+2.d0*mg_cache%dgpidot) &
+                                & - 0.5d0*mg_cache%mudot/mg_cache%k2*(mg_cache%rhoDelta+2.d0*mg_cache%dgpi)
+
+        else if (model==2 .or. &
+                 model==3) then
+
+            mg_cache%MG_psidot = mg_cache%R * mg_cache%MG_phidot + mg_cache%Rdot * mg_cache%MG_phi - &
+                            & mg_cache%Qdot*mg_cache%dgpi/mg_cache%k2 - mg_cache%Q * mg_cache%dgpidot /mg_cache%k2
+
+        end if
+
+        mg_cache%MG_ISW = mg_cache%MG_phidot+mg_cache%MG_psidot
+
+        mg_cache%MG_alphadot = mg_cache%MG_psi - mg_cache%adotoa * mg_cache%MG_alpha
+
+    end subroutine MGCAMB_compute_ISW
+
+    !---------------------------------------------------------------------------
+    !> this subroutine computes the lensing term in MG
+    subroutine MGCAMB_compute_lensing( a, mg_par_cache, mg_cache )
+        use precision
+        implicit none
+
+        real(dl) :: a   !< scale factor
+        type(MGCAMB_timestep_cache), intent(inout) :: mg_cache      !< cache containing the time-dependent quantities
+        type(MGCAMB_parameter_cache), intent(in)   :: mg_par_cache  !< cache containing the parameters
+
+        mg_cache%MG_lensing = mg_cache%MG_phi + mg_cache%MG_psi
+
+    end subroutine MGCAMB_compute_lensing
 
 
     !-----------------------------------------------
@@ -299,8 +373,10 @@ contains
 
 
         else if (model ==6) then ! Linder Gamma. This has to be adapted to arbitrary background
-                omm=(mg_par_cache%omegab+mg_par_cache%omegac)/((mg_par_cache%omegab+mg_par_cache%omegac)+(1-mg_par_cache%omegab-mg_par_cache%omegac)*a**3)
-                ommdot=-3.d0*omm**2*a**3*mg_cache%adotoa*(1-mg_par_cache%omegab-mg_par_cache%omegac)/(mg_par_cache%omegab+mg_par_cache%omegac)
+                omm=(mg_par_cache%omegab+mg_par_cache%omegac)/((mg_par_cache%omegab+mg_par_cache%omegac) &
+                    & + (1-mg_par_cache%omegab-mg_par_cache%omegac)*a**3)
+                ommdot=-3.d0*omm**2*a**3*mg_cache%adotoa*(1-mg_par_cache%omegab-mg_par_cache%omegac) &
+                        & /(mg_par_cache%omegab+mg_par_cache%omegac)
 
                 MGCAMB_Mu=2.d0/3.d0*omm**(Linder_gamma-1.d0)*&
                 (omm**Linder_gamma+2-3.d0*Linder_gamma+3.d0*(Linder_gamma-0.5d0)*omm)
@@ -359,12 +435,17 @@ contains
             end if
 
         else if ( model ==6) then
-                omm=(mg_par_cache%omegab+mg_par_cache%omegac)/((mg_par_cache%omegab+mg_par_cache%omegac)+(1-mg_par_cache%omegab-mg_par_cache%omegac)*a**3)
-                ommdot=-3.d0*omm**2*a**3*adotoa*(1-mg_par_cache%omegab-mg_par_cache%omegac)/(mg_par_cache%omegab+mg_par_cache%omegac)
 
-                MGCAMB_Mudot = MGMu(a,adotoa, k2,6)/omm*(Linder_gamma-1.d0)*ommdot+&
-                        2.d0/3.d0*omm**(Linder_gamma-1.d0)*ommdot*&
-                        (Linder_gamma*omm**(Linder_gamma-1.d0)+3.d0*(Linder_gamma-0.5d0))
+            mu = MGCAMB_Mu( a, mg_par_cache, mg_cache )
+
+            omm=(mg_par_cache%omegab+mg_par_cache%omegac)/((mg_par_cache%omegab+mg_par_cache%omegac) &
+                & +(1-mg_par_cache%omegab-mg_par_cache%omegac)*a**3)
+            ommdot=-3.d0*omm**2*a**3*mg_cache%adotoa*(1-mg_par_cache%omegab-mg_par_cache%omegac) &
+                & /(mg_par_cache%omegab+mg_par_cache%omegac)
+
+            MGCAMB_Mudot = mu/omm*(Linder_gamma-1.d0)*ommdot+&
+                    2.d0/3.d0*omm**(Linder_gamma-1.d0)*ommdot*&
+                    (Linder_gamma*omm**(Linder_gamma-1.d0)+3.d0*(Linder_gamma-0.5d0))
 
         else if (model==7 .or. &
                 model==8 .or. &
@@ -499,9 +580,10 @@ contains
 
         ! Hu-Sawicki f(R) model: m, beta parametrization as in 1305.5647
         else if (model == 9)then
-            FRm0 = (mg_par_cache%h0/3.0D05)*sqrt((4.d0*mg_par_cache%omegav + mg_par_cache%omegab + mg_par_cache%omegac)/((FRn+1.d0)*F_R0))!note factor of c here
-            MGCAMB_M = FRm0 * ((4.d0 * mg_par_cache%omegav + (mg_par_cache%omegab + mg_par_cache%omegac)*a**(-3.d0))/(4.d0 * mg_par_cache%omegav + mg_par_cache%omegab &
-            + mg_par_cache%omegac))**(FRn/2.d0+1.d0)
+            FRm0 = (mg_par_cache%h0/3.0D05)*sqrt((4.d0*mg_par_cache%omegav + mg_par_cache%omegab + mg_par_cache%omegac) &
+                    & /((FRn+1.d0)*F_R0))!note factor of c here
+            MGCAMB_M = FRm0 * ((4.d0 * mg_par_cache%omegav + (mg_par_cache%omegab + mg_par_cache%omegac)*a**(-3.d0)) &
+                    & /(4.d0 * mg_par_cache%omegav + mg_par_cache%omegab + mg_par_cache%omegac))**(FRn/2.d0+1.d0)
 
         ! Simpler DILATON model
         else if ( model == 10 )then
@@ -528,7 +610,7 @@ contains
 
         ! SYMMETRON
         if(model == 7) then
-            MGCAMB_Mdot = 1.5d0 * (mg_par_cache%H0/3.0D05)/(xi_star) *((a_star/a)**3.d0 * mg_cache%adotoa)/( sqrt(1.d0-(a_star/a)**3.d0))
+            MGCAMB_Mdot = 1.5d0*(mg_par_cache%H0/3.0D05)/(xi_star)*((a_star/a)**3.d0*mg_cache%adotoa)/(sqrt(1.d0-(a_star/a)**3.d0))
 
         ! DILATON
         else if (model==8) then
@@ -537,9 +619,10 @@ contains
         ! Hu-Sawicki f(R) model
         else if (model == 9)then
 
-            FRm0 = (mg_par_cache%h0/3.0D05)*sqrt((4.d0*mg_par_cache%omegav + mg_par_cache%omegab + mg_par_cache%omegac)/((FRn+1.d0)*F_R0))
-            MGCAMB_Mdot = m / (4.d0 * mg_par_cache%omegav + (mg_par_cache%omegab + mg_par_cache%omegac)*a**(-3.d0)) * (-3.d0* FRn / 2.d0 - 3.d0) *&
-            ((mg_par_cache%omegab + mg_par_cache%omegac)* a**(-3.d0) * mg_cache%adotoa )!/(4.d0 * mg_par_cache%omegav + mg_par_cache%omegab + mg_par_cache%omegac)) ! complete this
+            FRm0 = (mg_par_cache%h0/3.0D05)*sqrt((4.d0*mg_par_cache%omegav + mg_par_cache%omegab + mg_par_cache%omegac)/ &
+                    & ((FRn+1.d0)*F_R0))
+            MGCAMB_Mdot = m / (4.d0 * mg_par_cache%omegav + (mg_par_cache%omegab + mg_par_cache%omegac)*a**(-3.d0)) &
+                    & * (-3.d0*FRn/2.d0-3.d0)*((mg_par_cache%omegab + mg_par_cache%omegac)* a**(-3.d0)*mg_cache%adotoa)!/(4.d0 * mg_par_cache%omegav + mg_par_cache%omegab + mg_par_cache%omegac)) ! complete this
 
         ! Simple DILATON model
         else if (model ==10)then
@@ -586,13 +669,17 @@ contains
         type(MGCAMB_timestep_cache),  intent(in) :: mg_cache        !< cache containing the time-dependent quantities
         type(MGCAMB_parameter_cache), intent(in) :: mg_par_cache    !< cache containing the parameters
 
+        real(dl) :: beta
+
+        beta = MGCAMB_Beta( a, mg_par_cache, mg_cache )
+
         ! SYMMETRON
         if(model == 7) then
-            MGCAMB_Betadot = 1.5d0 * (beta_star * (a_star/a)**3.d0 * adotoa) /( sqrt(1.d0-(a_star/a)**3.d0))
+            MGCAMB_Betadot = 1.5d0 * (beta_star * (a_star/a)**3.d0 * mg_cache%adotoa) /( sqrt(1.d0-(a_star/a)**3.d0))
 
         ! DILATON
         else if (model==8) then
-            MGCAMB_Betadot = MGBeta(a, adotoa, 8) * (DilS * a**(2.d0* DilR - 3.d0) * adotoa)
+            MGCAMB_Betadot = beta * (DilS * a**(2.d0* DilR - 3.d0) *  mg_cache%adotoa)
 
         ! Hu-Sawicki f(R) model
         else if (model == 9)then
@@ -600,7 +687,7 @@ contains
 
         ! Simple DILATON model
         else if (model ==10)then
-            MGCAMB_Betadot = 3.d0 *MGBeta(a,adotoa,10)*adotoa
+            MGCAMB_Betadot = 3.d0 *beta* mg_cache%adotoa
 
         end if
 
@@ -679,7 +766,7 @@ contains
             MGCAMB_Rdot = 0.d0
 
         else if (model ==3) then
-            MGCAMB_Rdot = (Rnot - 1.d0)*mg_cacheadotoa* sss* a**(sss)
+            MGCAMB_Rdot = (Rnot - 1.d0)*mg_cache%adotoa* sss* a**(sss)
 
         end if
 

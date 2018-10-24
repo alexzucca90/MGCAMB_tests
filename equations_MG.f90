@@ -1256,9 +1256,7 @@
     real(dl) ISW
     
     !> MGCAMB MOD START: adding variables
-
     type(MGCAMB_timestep_cache) :: mgcamb_cache
-
     real(dl) adotdota, term1, term2, term3, term4, term5, term6, adotdotdota, Hdotdot, omm, ommdot, ommdotdot
     real(dl) cs2, opacity, dopacity
     real(dl) MG_gamma, MG_gammadot, MG_mu, MG_mudot, etadot
@@ -1301,7 +1299,6 @@
     vbdot =yprime(5)
 
     !  Compute expansion rate from: grho 8*pi*rho*a**2
-
     grhob_t=grhob/a
     grhoc_t=grhoc/a
     grhor_t=grhornomass/a2
@@ -1310,22 +1307,35 @@
     grho=grhob_t+grhoc_t+grhor_t+grhog_t+grhov_t
     gpres=(grhog_t+grhor_t)/3+grhov_t*w_lam
 
+    !> MGCAMB MOD START: decide whether it's MG or GR
+    ! In symmetron GRtrans is replaced by a_star, so distinguish the cases.
+    if (model == 7) then
+        if (a < a_star) then
+            tempmodel = 0
+        else
+            tempmodel = model
+        end if
+    else
+        if ( a.lt. GRtrans ) then
+            tempmodel = 0
+        else
+            tempmodel = model
+        end if
+    end if
+    !< MGCAMB MOD END.
+
     !> MGCAMB MOD START: filling the timestep cache
-    ! background quantities
-    mgcamb_cache%grhob_t    = grhob_t
-    mgcamb_cache%grhoc_t    = grhoc_t
-    mgcamb_cache%grhor_t    = grhor_t
-    mgcamb_cache%grhog_t    = grhorg_t
-    mgcamb_cache%adotoa     = adotoa
-    mgcamb_cache%Hdot       = Hdot
-    mgcamb_cache%k          = k
-    mgcamb_cache%k2         = k2
-    mgcamb_cache%etak       = etak
-    mgcamb_cache%dgrho      = dgrho
-    mgcamb_cache%dgq        = dgq
-    mgcamb_cache%pidot_sum  = pidot_sum
-    mgcamb_cache%dgpi_w_sum = dgpi_w_sum
-    mgcamb_cache%dgpi       = dgpi
+    if ( tempmodel /= 0 ) then
+        ! background quantities
+        mgcamb_cache%grhob_t    = grhob_t
+        mgcamb_cache%grhoc_t    = grhoc_t
+        mgcamb_cache%grhor_t    = grhor_t
+        mgcamb_cache%grhog_t    = grhog_t
+        ! perturbation quantities
+        mgcamb_cache%k          = k
+        mgcamb_cache%k2         = k2
+        mgcamb_cache%etak       = etak
+    end if
     !< MGCAMB MOD END
 
     !  8*pi*a*a*SUM[rho_i*clx_i] add radiation later
@@ -1339,10 +1349,16 @@
     pidot_sum = 0
 
     !> MGCAMB MOD START: compatibility with massive neutrinos
-    dgpi_w_sum = 0
-    if (CP%Num_Nu_Massive /= 0) then
-        !call MassiveNuVarsOut(EV,y,yprime,a,grho,gpres,dgrho,dgq,dgpi, dgpi_diff,pidot_sum)
+    if ( tempmodel == 0 ) then
+        if (CP%Num_Nu_Massive /= 0) then
+            call MassiveNuVarsOut(EV,y,yprime,a,grho,gpres,dgrho,dgq,dgpi, dgpi_diff,pidot_sum)
+        end if
+    else if ( tempmodel /= 0 ) then
+        dgpi_w_sum = 0
         call MassiveNuVarsOut(EV,y,yprime,a,grho,gpres,dgrho,dgq,dgpi, dgpi_diff,pidot_sum, dgpi_w_sum=dgpi_w_sum)
+        mgcamb_cache%dgpi_diff  = dgpi_diff
+        mgcamb_cache%grho       = grho
+        mgcamb_cache%gpres      = gpres
     end if
     !< MGCAMB MOD END
 
@@ -1354,28 +1370,18 @@
     end if
 
     adotoa=sqrt((grho+grhok)/3)
-        
+
     !> MGCAMB MOD START: computing a'' and H' deciding whether or not to switch to MG
     adotdota=(adotoa*adotoa-gpres)/2.d0
     Hdot =adotdota-adotoa**2.d0
 
 
 
-    ! In symmetron GRtrans is replaced by a_star, so distinguish the cases.
-    if (model == 7) then
-        if (a< a_star) then
-        tempmodel = 0
-        else
-          tempmodel = model
-        end if
-    else
-       if ( a.lt. GRtrans ) then
-          tempmodel = 0
-       else
-          tempmodel = model
-       end if
+    if ( tempmodel /= 0 ) then
+        ! filling expansion history cache
+        mgcamb_cache%adotoa     = adotoa
+        mgcamb_cache%Hdot       = Hdot
     end if
-    !< MGCAMB MOD END.
 
 
     !> MGCAMB MOD START: the RSA approximation is not implemented yet
@@ -1443,132 +1449,52 @@
     end if
     !< MGCAMB MOD END
 
-
     dgrho       = dgrho + grhog_t*clxg+grhor_t*clxr
     dgq         = dgq   + grhog_t*qg+grhor_t*qr
     dgpi        = dgpi  + grhor_t*pir + grhog_t*pig
     pidot_sum   = pidot_sum + grhor_t*pirdot + grhog_t*pigdot
 
 
-
-    !> MGCAMB MOD START
-    dgpi_w_sum = dgpi_w_sum + 3.d0*(grhor_t*pir+grhog_t*pig)
-    !< MGCAMB MOD END
-
-
     !  Get sigma (shear) and z from the constraints
     !  have to get z from eta for numerical stability
-
     !> MGCAMB MOD START: if MG then use Modified Einstein equations
     if (tempmodel /= 0) then
+
+        dgpi_w_sum = dgpi_w_sum + 3.d0*(grhor_t*pir+grhog_t*pig)
 
         ! compatibility with massive neutrinos
         if (CP%Num_Nu_Massive /= 0) then
             call MassiveNuVarsOut(EV,y,yprime,a,grho=MG_grhonu, gpres=MG_gpresnu)
         end if
 
-        ! MU, GAMMA parametrization
-        if (model==1 .or.&
-            model==4 .or.&
-            model==5 .or.&
-            model==6 .or.&
-            model==7 .or.&
-            model==8 .or.&
-            model==9 .or.&
-            model==10) then
+        ! fill the background neutrinos cache
+        mgcamb_cache%grhonu_t  = MG_grhonu
+        mgcamb_cache%gpresnu_t = MG_gpresnu
 
-            ! calculate the MG functions
-            MG_mu       = MGMu(a,adotoa,k2,model)
-            MG_mudot    = MGMuDot(a,adotoa,k2,Hdot,model)
-            MG_gamma    = MGGamma(a,adotoa,k2,model)
-            MG_gammadot = MGGammaDot(a,adotoa,k2,model)
+        ! fill perturbation cache
+        mgcamb_cache%dgrho      = dgrho
+        mgcamb_cache%dgq        = dgq
+        mgcamb_cache%pidot_sum  = pidot_sum
+        mgcamb_cache%dgpi_w_sum = dgpi_w_sum
+        mgcamb_cache%dgpi       = dgpi
+        mgcamb_cache%dgpi_diff  = dgpi_diff
+        mgcamb_cache%rhoDelta   = dgrho + 3._dl * adotoa * dgq/ k
 
-            ! MG_rhoDelta = \kappa a^2 \sum_i \rho_i (\delta_i + 3 adotoa (1+w_i))
-            MG_rhoDelta = dgrho + 3._dl * adotoa * dgq/ k
+        ! calculate the MG functions
+        call MGCAMB_compute_MG_functions( a, mgcamb_par_cache, mgcamb_cache )
 
-            ! calculate alpha
-            MG_alpha = ( etak/k + MG_mu*(MG_gamma*MG_rhoDelta+(MG_gamma -1.d0)*2.d0* dgpi)/(2.d0*k2)) / adotoa
+        ! calculate sigma
+        call MGCAMB_compute_sigma( a, mgcamb_par_cache, mgcamb_cache )
+        sigma = mgcamb_cache%sigma
 
-            ! calculate sigma
-            sigma = k * MG_alpha
-
-            !>  massive neutrinos contributions added
-            fmu =k2+0.5d0*MG_gamma*MG_mu*(3.d0*(grhoc_t+grhob_t)+ 4.d0*(grhog_t+grhor_t) + 3.d0*(MG_grhonu+MG_gpresnu))
-
-            !> missing massive neutrinos contributions, if w_DE /= -1 this has to be modified
-            f1 = k2+0.5d0*(3.d0*(grhoc_t+grhob_t)+ 4.d0*(grhog_t+grhor_t) + 3.d0*(MG_grhonu+MG_gpresnu))
-
-            term1 = MG_gamma*MG_mu* f1 * dgq/k
-
-            !> missing massive neutrinos contributions
-            term2 = k2*MG_alpha* (MG_mu* MG_gamma- 1.d0)*(grhoc_t+grhob_t+(4.d0/3.d0)*(grhog_t+grhor_t) + (MG_grhonu+MG_gpresnu))
-
-            term3= (MG_mu * ( MG_gamma -1.d0)* adotoa - MG_gamma*MG_mudot - MG_gammadot*MG_mu )*MG_rhoDelta
-
-            ! typo corrected here
-            term4 = (2.d0)*MG_mu*(MG_gamma - 1.d0)*adotoa*dgpi_w_sum
-
-            ! this term has been separated from the previous
-            term5 = -2.d0*((MG_gamma-1.d0)*MG_mudot -MG_gammadot*MG_mu)*dgpi
-
-            !> adding  massive neutrinos contributions
-            term6= (2.d0) * MG_mu*( 1.d0 - MG_gamma)* pidot_sum
-
-            ! calculate \dot{\eta}
-            etadot = (term1 + term2 + term3 + term4 + term5 + term6)/(2.d0 *fmu)
-
-            ! Finally calculate Z
-            z = sigma - 3.d0 * etadot/k
-
-            MG_psi      = - MG_mu * ( MG_rhoDelta + 2.d0* dgpi)/(2.d0*k2)
-            MG_phi      = MG_gamma * MG_psi + MG_mu*dgpi/k2
-            MG_phidot   = etadot - adotoa * (MG_psi - adotoa * MG_alpha)- Hdot * MG_alpha
-
-        ! Q,R parametrization
-        else if ( model == 2 .or. &
-                  model == 3) then
-
-            ! calculate the MG functions
-            MGQ     = MG_Q(a,adotoa, model)
-            MGR     = MG_R(a,adotoa, model)
-            MGQdot  = MG_QDot(a,adotoa, model)
-            MGRdot  = MG_RDot(a,adotoa, model)
-
-            MG_rhoDelta = dgrho + 3._dl * adotoa * dgq/ k
-
-            MG_phi      = - MG_rhoDelta * MGQ/(2.d0*k2)
-            sigma       = (etak - k * MG_phi)/adotoa
-            MG_alpha    = sigma/k
-
-            ! adding massive neutrinos contributions
-            fQ      =k2+(3.d0/2.d0)*MGQ*(grhob_t+grhoc_t+(4.d0/3.d0)*(grhor_t+grhog_t)+(MG_grhonu+MG_gpresnu))
-
-            ! if w_DE /= -1 then this has to be changed
-            f1      =k2+(3.d0/2.d0)*(grhob_t+grhoc_t+(4.d0/3.d0)*(grhor_t+grhog_t)+(MG_grhonu+MG_gpresnu))
-
-            k2alpha = k * sigma
-
-            term1 = MGQ * f1 * dgq/k
-
-            ! adding massive neutrinos contribution
-            term2 = (MGQ - 1.d0) * k2alpha * (grhob_t+grhoc_t+(4.d0/3.d0)*(grhor_t+grhog_t)+ (MG_grhonu+MG_gpresnu))
-
-            term3 = -( MGQdot + (MGR-1.d0) * MGQ * adotoa) * MG_rhoDelta
-
-            etadot = (term1 + term2 + term3)/( 2.d0 * fQ )
-
-            z = sigma - 3.d0 * etadot/k
-
-            MG_psi      = MGR * MG_phi - MGQ * dgpi/k2
-            MG_phidot   = etadot - adotoa * (MG_psi - adotoa * MG_alpha)- Hdot * MG_alpha
-
-        end if
+        ! calculate z
+        call MGCAMB_compute_z( a, mgcamb_par_cache, mgcamb_cache )
+        z = mgcamb_cache%z
+        !sigmadot = mgcamb_cache%sigmadot
 
      else !GR limit ( model = 0 )
-
          z=(0.5_dl*dgrho/k + etak)/adotoa
          sigma=z+1.5_dl*dgq/k2
-
      end if
     !< MGCAMB MOD END.
 
@@ -1602,20 +1528,9 @@
     diff_rhopi = pidot_sum - ( 4*dgpi+ dgpi_diff )*adotoa
     !> MGCAMB MOD END
 
-    !> MGCAMB MOD START: adding term 0 for MG_rhoDeltadot
-    if (tempmodel /= 0 ) then
-        term0 = k2 + 3.d0* (adotoa**2.d0 - Hdot)
-
-        !adding MG_rhoDeltadot
-        MG_rhoDeltadot = -term0 * dgq/k - (grho + gpres)* k*z - adotoa * MG_rhoDelta - 2.d0 * adotoa * dgpi
-
-        !adding dgpidot
-        dgpidot = pidot_sum - (2.d0*dgpi+ dgpi_diff )*adotoa
-    end if
-    !< MGCAMB MOD END.
 
     !> MGCAMB MOD START: modifying the ISW effect
-    if(tempmodel == 0 ) then! GR ISW effect
+    if ( tempmodel == 0 ) then! GR ISW effect
         !Maple's fortran output - see scal_eqs.map
         !2phi' term (\phi' + \psi' in Newtonian gauge)
         ISW = (4.D0/3.D0*k*EV%Kf(1)*sigma+(-2.D0/3.D0*sigma-2.D0/3.D0*etak/adotoa)*k &
@@ -1638,51 +1553,11 @@
 
     else ! MG ISW effect
         ! ISW for mu,gamma parametrization
-        if (model==1 .or. &
-            model==4 .or. &
-            model==5 .or. &
-            model==6 .or. &
-            model==7 .or. &
-            model==8 .or. &
-            model==9 .or. &
-            model==10) then
 
-            MG_psidot = - 0.5d0*MG_mu/k2*(MG_rhoDeltadot+2.d0*dgpidot) - 0.5d0*MG_mudot/k2*(MG_rhoDelta+2.d0*dgpi)
-            
+        call MGCAMB_compute_ISW( a, mgcamb_par_cache, mgcamb_cache )
 
-            ISW_MG = MG_phidot + MG_psidot
+        ISW = expmmu(j) * mgcamb_cache%MG_ISW
 
-            ! alternative expression
-            !ISW_MG = - (MG_gammadot* MG_mu + MG_gamma* MG_mudot)*0.5d0/k2 * (dgrho + 2.d0*dgpi) - MG_mu* MG_gamma*0.5d0/k2*&
-            !         (MG_rhoDeltadot + 2.d0* dgpidot) - MG_mudot*0.5d0/k2*dgrho - MG_mu*0.5d0/k2*MG_rhoDeltadot
-
-
-        ! ISW for Q,R parametrization: I have to fix this
-        else if (model==2 .or. &
-                 model==3) then
-
-            ! old form
-            !MG_psidot = MGR * MG_phidot + MGRdot * MG_phi - ( MGQdot * 2.d0 * dgpi + MGQ * pidot_sum)/k2
-
-            ! new expression
-            MG_psidot = MGR * MG_phidot + MGRdot * MG_phi - MGQdot*dgpi/k2 - MGQ * dgpidot /k2
-
-            ISW_MG = MG_phidot+MG_psidot
-
-            ! alternative ISW term
-            !ISW_MG = 0.5d0/k2 * ((MGRdot * MGQ + (1.d0 + MGR)* MGQdot)*MG_rhoDelta + (1.d0 + MGR)*MGQ*MG_rhoDeltadot - 2.d0 &
-            !         * MGQdot* dgpi - 2.d0 * MGQ*dgpidot)
-
-            ! alternative form of the ISW term:
-            !ISW_MG = - MGQdot*dgpi/k2 - MGQ *dgpidot/k2- 0.5d0*(MGQdot*(1.d0+MGR)+MGQ*MGRdot)*MG_rhoDelta/k2 -&
-            !        & 0.5d0*MGQ*(1.d0+MGR)*MG_rhoDeltadot/k2
-
-        end if
-
-        ISW_MG= expmmu(j) * ISW_MG
-        ISW=ISW_MG
-
-        MG_alphadot= MG_psi - adotoa * MG_alpha
         polterdot=9._dl/15._dl*ypolprime(2) + 0.1_dl*pigdot
 
         ! old version
@@ -1696,7 +1571,7 @@
         ! new version
         sources(1) = ISW&
         & +vis(j)* (clxg/4.D0 + polter/1.6d0 + vbdot/k -9.D0*(polterdot)/k2*opac(j)/16.D0 -9.D0/16.D0*dopac(j)*polter/k2&
-        & + 21.D0/10.D0*MG_alphadot + 3.D0/40.D0*qgdot/k &
+        & + 21.D0/10.D0*mgcamb_cache%MG_alphadot + 3.D0/40.D0*qgdot/k &
         & +(-3.D0/8.D0*EV%Kf(2)*ypolprime(3) - 9.D0/80.D0*EV%Kf(2)*octgprime)/k)&
         & +((-9.D0/160.D0*pig-27.D0/80.D0*ypol(2))/k**2*opac(j)+(11.D0/10.D0*sigma- &
         & 3.D0/8.D0*EV%Kf(2)*ypol(3)+vb-9.D0/80.D0*EV%Kf(2)*octg+3.D0/40.D0*qg)/k-(- &
@@ -1738,17 +1613,16 @@
         !Get lensing sources
         !Can modify this here if you want to get power spectra for other tracer
         if (tau>tau_maxvis .and. CP%tau0-tau > 0.1_dl) then
-            !phi_lens = Phi - 1/2 kappa (a/k)^2 sum_i rho_i pi_i
-            phi = -(dgrho +3*dgq*adotoa/k)/(k2*EV%Kf(1)*2) - dgpi/k2/2
 
             !> MGCAMB MOD START: modifying the lensing potential
             if(tempmodel == 0 ) then
+                !phi_lens = Phi - 1/2 kappa (a/k)^2 sum_i rho_i pi_i
+                phi = -(dgrho +3*dgq*adotoa/k)/(k2*EV%Kf(1)*2) - dgpi/k2/2
                 sources(3) = -2*phi*f_K(tau-tau_maxvis)/(f_K(CP%tau0-tau_maxvis)*f_K(CP%tau0-tau))
+
             else
-            if (model==1 .or. model==4 .or. model==5.or. model==6 .or. model == 7 .or. model ==8 .or. model==9 .or. model ==10)&
-                sources(3) = -MG_mu*(1+MG_gamma)*phi*f_K(tau-tau_maxvis)/(f_K(CP%tau0-tau_maxvis)*f_K(CP%tau0-tau))
-            if(model==2.or.model==3)&
-                sources(3) = -MGQ*(1+MGR)*phi*f_K(tau-tau_maxvis)/(f_K(CP%tau0-tau_maxvis)*f_K(CP%tau0-tau))
+                call MGCAMB_compute_lensing( a, mgcamb_par_cache, mgcamb_cache )
+                sources(3) = - mgcamb_cache%MG_lensing*f_K(tau-tau_maxvis)/(f_K(CP%tau0-tau_maxvis)*f_K(CP%tau0-tau))
             end if
            !< MGCAMB MOD END
             
@@ -2280,7 +2154,7 @@
     use ThermoData
     use MassiveNu
     !> MGCMAB MOD START: adding mg module
-    use mgvariables
+    use MGCAMB
     !< MGCAMB MOD END
 
     implicit none
@@ -2310,6 +2184,7 @@
     real(dl) cothxor !1/tau in flat case
 
     !> MGCAMB MOD START: adding the new MG variables
+    type(MGCAMB_timestep_cache) :: mgcamb_cache
     real(dl) :: term1, term2, term3,term4, term5, term6
     real(dl ):: adotdotdota, Hdotdot, omm, ommdot, ommdotdot
     real(dl) :: MG_gamma, MG_gammadot, MG_mu, MG_mudot, etadot
@@ -2385,7 +2260,7 @@
 
       cothxor=1._dl/tau
 
-    else if ( model ==0 ) then
+    else if ( model == 0 ) then
       adotoa=sqrt((grho+grhok)/3._dl)
       cothxor=1._dl/tanfunc(tau/CP%r)/CP%r
     else
@@ -2408,6 +2283,23 @@
           tempmodel = model
        end if
     end if
+
+    !> MGCAMB MOD START: filling the timestep cache
+    if ( tempmodel /= 0 ) then
+        ! background quantities
+        mgcamb_cache%grhob_t    = grhob_t
+        mgcamb_cache%grhoc_t    = grhoc_t
+        mgcamb_cache%grhor_t    = grhor_t
+        mgcamb_cache%grhog_t    = grhog_t
+        ! perturbation quantities
+        mgcamb_cache%k          = k
+        mgcamb_cache%k2         = k2
+        mgcamb_cache%etak       = etak
+        ! filling expansion history cache
+        mgcamb_cache%adotoa     = adotoa
+        mgcamb_cache%Hdot       = Hdot
+    end if
+    !< MGCAMB MOD END
 
 
      if (w_lam /= -1 .and. w_Perturb.and. ay(1) .lt. GRtrans) then
@@ -2483,7 +2375,7 @@
     MG_grhonu   = 0.d0
     dgpi_w_sum  = 0.d0
 
-    if (CP%Num_Nu_Massive > 0) then
+    if (CP%Num_Nu_Massive /= 0) then
         !> ayprime is not used to compute dgpi so it's safe to use this.
         ! MassiveNuVarsOut(EV,y,yprime,a,grho,gpres,dgrho,dgq,dgpi, gdpi_diff,pidot_sum,clxnu_all)
         call MassiveNuVarsOut(EV,ay,ayprime,a, grho=MG_grhonu, gpres=MG_gpresnu, dgpi=dgpi, dgpi_w_sum=dgpi_w_sum)
@@ -2491,237 +2383,172 @@
 
     ! adding the massless neutrinos and photons contributions to the anisotropic stress
     dgpi = dgpi + grhor_t*pir + grhog_t*pig
-    dgpi_w_sum = dgpi_w_sum + 3.d0*(grhor_t*pir + grhog_t*pig)
+    !dgpi_w_sum = dgpi_w_sum + 3.d0*(grhor_t*pir + grhog_t*pig)
 
     ! Computing Z and sigma with modified Einstein equation
     if (tempmodel /= 0) then
-        ! mu, gamma parametrization
-	    if (model == 1 .or. &
-            model == 4 .or. &
-            model == 5 .or. &
-            model == 6 .or. &
-            model == 7 .or. &
-            model == 8 .or. &
-            model == 9 .or. &
-            model == 10) then
 
-            !> compute the MG funtions
-            MG_mu       = MGMu( a,adotoa,k2,model )
-            MG_mudot    = MGMuDot( a,adotoa,k2,Hdot, model )
-            MG_gamma    = MGGamma( a,adotoa,k2,model )
-            MG_gammadot = MGGammaDot( a,adotoa,k2,model )
+        dgpi_w_sum = dgpi_w_sum + 3.d0*(grhor_t*pir+grhog_t*pig)
 
-            !> compute rhoDelta
-            MG_rhoDelta = dgrho + 3._dl * adotoa * dgq/ k
+        ! compatibility with massive neutrinos
+        !if (CP%Num_Nu_Massive /= 0) then
+        !    call MassiveNuVarsOut(EV,ay,ayprime,a,grho=MG_grhonu, gpres=MG_gpresnu)
+        !end if
 
-            !> compute alpha
-            MG_alpha = ( etak/k + MG_mu*(MG_gamma*MG_rhoDelta+(MG_gamma -1.d0)*2.d0* dgpi)/(2.d0*k2)) / adotoa
+        ! fill the background neutrinos cache
+        mgcamb_cache%grhonu_t  = MG_grhonu
+        mgcamb_cache%gpresnu_t = MG_gpresnu
 
-            !> compute sigma
-            sigma = k * MG_alpha
+        ! fill perturbation cache
+        mgcamb_cache%dgrho      = dgrho
+        mgcamb_cache%dgq        = dgq
+        mgcamb_cache%dgpi_w_sum = dgpi_w_sum
+        mgcamb_cache%dgpi       = dgpi
+        !mgcamb_cache%dgpi_diff  = dgpi_diff
+        mgcamb_cache%rhoDelta   = dgrho + 3._dl * adotoa * dgq/ k
 
-            ! computing Z requires pidot.
-            ! First, start computing pidot for massless neutrinos and for photons
+        ! calculate the MG functions
+        call MGCAMB_compute_MG_functions( a, mgcamb_par_cache, mgcamb_cache )
 
-            !> massless neutrinos
-            if (EV%no_nu_multpoles) then
-                pirdot = 0.d0
+        ! calculate sigma
+        call MGCAMB_compute_sigma( a, mgcamb_par_cache, mgcamb_cache )
+        sigma = mgcamb_cache%sigma
+
+        ! computing Z requires pidot.
+        ! First, start computing pidot for massless neutrinos and for photons
+
+        !> massless neutrinos
+        if (EV%no_nu_multpoles) then
+            pirdot = 0.d0
+        else
+            ! Old expression
+            ! pirdot=k*(0.4_dl*qr-0.6_dl*ay(EV%lmaxg+10)+8._dl/15._dl*sigma)
+
+            ! New expression,
+
+            if (EV%lmaxnr>2) then
+                ix=EV%r_ix+2
+                pirdot=EV%denlk(2)*qr- EV%denlk2(2)*ay(ix+1)+8._dl/15._dl*k*sigma
             else
+
+                pirdot=EV%denlk(2)*qr +8._dl/15._dl*k*sigma
+            end if
+        end if
+
+
+        ! Photons: here the second-order tight coupling requires the knowledge of  already, so for now
+        ! we do not use pigdot = 0.d0 at second-order tight coupling. The user has to take into account this by setting GRtrans not too early in time
+        if (EV%no_phot_multpoles) then
+            pigdot = 0.d0
+        else
+
+            if (EV%tightcoupling) then
+                pigdot = 0.d0 ! It could improve to second order, but requires Z
+
+            else
+                E2=ay(EV%polind+2)
+                polter = pig/10+9._dl/15*E2 !2/15*(3/4 pig + 9/2 E2)
+
                 ! Old expression
-                ! pirdot=k*(0.4_dl*qr-0.6_dl*ay(EV%lmaxg+10)+8._dl/15._dl*sigma)
+                !pigdot=0.4_dl*k*qg-0.6_dl*k*ay(9)-opacity*(pig - polter) +8._dl/15._dl*k*sigma
 
-                ! New expression,
-
-                if (EV%lmaxnr>2) then
-                    ix=EV%r_ix+2
-                    pirdot=EV%denlk(2)*qr- EV%denlk2(2)*ay(ix+1)+8._dl/15._dl*k*sigma
-                else
-
-                    pirdot=EV%denlk(2)*qr +8._dl/15._dl*k*sigma
-                end if
+                ! New expression
+                if (EV%lmaxg>2) then
+                    ix= EV%g_ix+2
+                    pigdot=EV%denlk(2)*qg-EV%denlk2(2)*ay(ix+1)-opacity*(pig - polter) &
+                        +8._dl/15._dl*k*sigma
+                else !closed case
+                    pigdot=EV%denlk(2)*qg-opacity*(pig - polter) +8._dl/15._dl*k*sigma
+                endif
             end if
 
+        end if !no_phot_multpoles
 
-            ! Photons: here the second-order tight coupling requires the knowledge of  already, so for now
-            ! we do not use pigdot = 0.d0 at second-order tight coupling. The user has to take into account this by setting GRtrans not too early in time
-            if (EV%no_phot_multpoles) then
-                pigdot = 0.d0
-            else
+        !> start summing pidot
+        pidot_sum = 0.d0
+        pidot_sum = grhog_t*pigdot+grhor_t*pirdot
 
-                if (EV%tightcoupling) then
-                    pigdot = 0.d0 ! It could improve to second order, but requires Z
+        !> massive neutrinos contributions.
+        if (CP%Num_Nu_massive >0) then
+
+            !DIR$ LOOP COUNT MIN(1), AVG(1)
+            do nu_i = 1, CP%Nu_mass_eigenstates
+
+                if (EV%MassiveNuApprox(nu_i)) then
+                    !Now EV%iq0 = clx, EV%iq0+1 = clxp, EV%iq0+2 = G_1, EV%iq0+3=G_2=pinu
+                    !see astro-ph/0203507
+                    G11_t=EV%G11(nu_i)/a/a2
+                    G30_t=EV%G30(nu_i)/a/a2
+                    off_ix = EV%nu_ix(nu_i)
+                    w=wnu_arr(nu_i)
+
+                    !  don't need to get the lower moments, only the relevant for pinudot
+                    !  also, z has yet to be calculated
+                    !ayprime(off_ix)=-k*z*(w+1) + 3*adotoa*(w*ay(off_ix) - ay(off_ix+1))-k*ay(off_ix+2)
+                    !ayprime(off_ix+1)=(3*w-2)*adotoa*ay(off_ix+1) - 5._dl/3*k*z*w - k/3*G11_t
+                    ayprime(off_ix+2)=(3*w-1)*adotoa*ay(off_ix+2) - k*(2._dl/3*EV%Kf(1)*ay(off_ix+3)-ay(off_ix+1))
+                    ayprime(off_ix+3)=(3*w-2)*adotoa*ay(off_ix+3) + 2*w*k*sigma - k/5*(3*EV%Kf(2)*G30_t-2*G11_t)
 
                 else
-                    E2=ay(EV%polind+2)
-                    polter = pig/10+9._dl/15*E2 !2/15*(3/4 pig + 9/2 E2)
+                    ind=EV%nu_ix(nu_i)
+                    !DIR$ LOOP COUNT MIN(3), AVG(3)
+                    do i=1,EV%nq(nu_i)
+                        q=nu_q(i)
+                        aq=a*nu_masses(nu_i)/q
+                        v=1._dl/sqrt(1._dl+aq*aq)
 
-                    ! Old expression
-                    !pigdot=0.4_dl*k*qg-0.6_dl*k*ay(9)-opacity*(pig - polter) +8._dl/15._dl*k*sigma
-
-                    ! New expression
-                    if (EV%lmaxg>2) then
-                        ix= EV%g_ix+2
-                        pigdot=EV%denlk(2)*qg-EV%denlk2(2)*ay(ix+1)-opacity*(pig - polter) &
-                        +8._dl/15._dl*k*sigma
-                    else !closed case
-                        pigdot=EV%denlk(2)*qg-opacity*(pig - polter) +8._dl/15._dl*k*sigma
-                    endif
-                end if
-
-            end if !no_phot_multpoles
-
-            !> start summing pidot
-            pidot_sum = 0.d0
-            pidot_sum = grhog_t*pigdot+grhor_t*pirdot
-
-            !> massive neutrinos contributions.
-            if (CP%Num_Nu_massive >0) then
-
-                !DIR$ LOOP COUNT MIN(1), AVG(1)
-                do nu_i = 1, CP%Nu_mass_eigenstates
-
-                    if (EV%MassiveNuApprox(nu_i)) then
-                        !Now EV%iq0 = clx, EV%iq0+1 = clxp, EV%iq0+2 = G_1, EV%iq0+3=G_2=pinu
-                        !see astro-ph/0203507
-                        G11_t=EV%G11(nu_i)/a/a2
-                        G30_t=EV%G30(nu_i)/a/a2
-                        off_ix = EV%nu_ix(nu_i)
-                        w=wnu_arr(nu_i)
-
-                        !  don't need to get the lower moments, only the relevant for pinudot
-                        !  also, z has yet to be calculated
-                        !ayprime(off_ix)=-k*z*(w+1) + 3*adotoa*(w*ay(off_ix) - ay(off_ix+1))-k*ay(off_ix+2)
-                        !ayprime(off_ix+1)=(3*w-2)*adotoa*ay(off_ix+1) - 5._dl/3*k*z*w - k/3*G11_t
-                        ayprime(off_ix+2)=(3*w-1)*adotoa*ay(off_ix+2) - k*(2._dl/3*EV%Kf(1)*ay(off_ix+3)-ay(off_ix+1))
-                        ayprime(off_ix+3)=(3*w-2)*adotoa*ay(off_ix+3) + 2*w*k*sigma - k/5*(3*EV%Kf(2)*G30_t-2*G11_t)
-
-                    else
-                        ind=EV%nu_ix(nu_i)
-                        !DIR$ LOOP COUNT MIN(3), AVG(3)
-                        do i=1,EV%nq(nu_i)
-                            q=nu_q(i)
-                            aq=a*nu_masses(nu_i)/q
-                            v=1._dl/sqrt(1._dl+aq*aq)
-
-                            !> Z has yet to be calculated
-                            !ayprime(ind)=-k*(4._dl/3._dl*z + v*ay(ind+1))
-                            ind=ind+1
-                            ayprime(ind)=v*(EV%denlk(1)*ay(ind-1)-EV%denlk2(1)*ay(ind+1))
-                            ind=ind+1
-                            if (EV%lmaxnu_tau(nu_i)==2) then
-                                ayprime(ind)=-ayprime(ind-2) -3*cothxor*ay(ind)
-                            else
-                                ayprime(ind)=v*(EV%denlk(2)*ay(ind-1)-EV%denlk2(2)*ay(ind+1)) &
-                                +k*8._dl/15._dl*sigma
-                                do l=3,EV%lmaxnu_tau(nu_i)-1
-                                    ind=ind+1
-                                    ayprime(ind)=v*(EV%denlk(l)*ay(ind-1)-EV%denlk2(l)*ay(ind+1))
-                                end do
-                                !  Truncate moment expansion.
-                                ind = ind+1
-                                ayprime(ind)=k*v*ay(ind-1)-(EV%lmaxnu_tau(nu_i)+1)*cothxor*ay(ind)
-                            end if
-                            ind = ind+1
-                        end do
-                    end if
-                end do
-
-                if (EV%has_nu_relativistic) then
-                    ind=EV%nu_pert_ix
-                    ayprime(ind)=+k*a2*qr -k*ay(ind+1)
-                    ind2= EV%r_ix
-                    do l=1,EV%lmaxnu_pert-1
+                        !> Z has yet to be calculated
+                        !ayprime(ind)=-k*(4._dl/3._dl*z + v*ay(ind+1))
                         ind=ind+1
-                        ind2=ind2+1
-                        ayprime(ind)= -a2*(EV%denlk(l)*ay(ind2-1)-EV%denlk2(l)*ay(ind2+1)) &
-                                    +   (EV%denlk(l)*ay(ind-1)-EV%denlk2(l)*ay(ind+1))
+                        ayprime(ind)=v*(EV%denlk(1)*ay(ind-1)-EV%denlk2(1)*ay(ind+1))
+                        ind=ind+1
+                        if (EV%lmaxnu_tau(nu_i)==2) then
+                            ayprime(ind)=-ayprime(ind-2) -3*cothxor*ay(ind)
+                        else
+                            ayprime(ind)=v*(EV%denlk(2)*ay(ind-1)-EV%denlk2(2)*ay(ind+1)) &
+                                +k*8._dl/15._dl*sigma
+                            do l=3,EV%lmaxnu_tau(nu_i)-1
+                                ind=ind+1
+                                ayprime(ind)=v*(EV%denlk(l)*ay(ind-1)-EV%denlk2(l)*ay(ind+1))
+                            end do
+                            !  Truncate moment expansion.
+                            ind = ind+1
+                            ayprime(ind)=k*v*ay(ind-1)-(EV%lmaxnu_tau(nu_i)+1)*cothxor*ay(ind)
+                        end if
+                        ind = ind+1
                     end do
+                end if
+            end do
+
+            if (EV%has_nu_relativistic) then
+                ind=EV%nu_pert_ix
+                ayprime(ind)=+k*a2*qr -k*ay(ind+1)
+                ind2= EV%r_ix
+                do l=1,EV%lmaxnu_pert-1
                     ind=ind+1
                     ind2=ind2+1
-                    ayprime(ind)= k*(ay(ind-1) -a2*ay(ind2-1)) -(EV%lmaxnu_pert+1)*cothxor*ay(ind)
-                end if
-
-                ! after setting the Boltzmann hierarchy, compute pinudot (here pinudot = grhonu*pinudot)
-                ! here calculating pidot should be safe, as the only ayprime used do not require Z.
-                call MassiveNuVarsOut(EV, ay, ayprime, a, pidot_sum=pidot_sum)
-
+                    ayprime(ind)= -a2*(EV%denlk(l)*ay(ind2-1)-EV%denlk2(l)*ay(ind2+1)) &
+                                    +   (EV%denlk(l)*ay(ind-1)-EV%denlk2(l)*ay(ind+1))
+                end do
+                ind=ind+1
+                ind2=ind2+1
+                ayprime(ind)= k*(ay(ind-1) -a2*ay(ind2-1)) -(EV%lmaxnu_pert+1)*cothxor*ay(ind)
             end if
 
-            !> adding the massive neutrinos contibutions
-            fmu =k2+0.5d0*MG_gamma*MG_mu*(3.d0*(grhoc_t+grhob_t)+ 4.d0*(grhog_t+grhor_t) +3.d0 * (MG_grhonu + MG_gpresnu))
-
-            !> adding massive neutrinos contributions, if w_DE is not -1 this has to be changed
-            f1 = k2+0.5d0*(3.d0*(grhoc_t+grhob_t)+ 4.d0*(grhog_t+grhor_t) + 3.d0 * (MG_grhonu + MG_gpresnu))
-
-            term1 = MG_gamma*MG_mu* f1 * dgq/k
-
-            !> adding massive neutrinos contribution, if w_DE /= -1 this has to be changed
-            term2 = k2*MG_alpha* (MG_mu* MG_gamma- 1.d0)*(grhoc_t+grhob_t+(4.d0/3.d0)*(grhog_t+grhor_t) + (MG_grhonu + MG_gpresnu) )
-
-            term3= (MG_mu * ( MG_gamma -1.d0)* adotoa - MG_gamma*MG_mudot - MG_gammadot*MG_mu )*MG_rhoDelta
-
-            ! typo corrected here
-            term4 = (2.d0)*MG_mu*(MG_gamma - 1.d0)*adotoa*dgpi_w_sum
-
-            ! separated fromt the previous term
-            term5 = -2.d0*((MG_gamma-1.d0)*MG_mudot -MG_gammadot*MG_mu)*dgpi
-
-            !> adding massive neutrinos contribution
-            term6= (2.d0) * MG_mu*(1.d0 - MG_gamma)* pidot_sum
-
-            !> calculate etadot
-            etadot = (term1 + term2 + term3 + term4 + term5 + term6)/( 2.d0 *fmu)
-
-            !> finally calculate Z
-            z = sigma - 3.d0 * etadot/k
-
-            !> Calculate the Newtonian potential
-            MG_psi = - MG_mu * ( MG_rhoDelta + 2.d0* dgpi)/(2.d0*k2)
-
-            !> calculate the curvature perturbation potential
-            MG_phi = MG_gamma * MG_psi + MG_mu* 1.d0*dgpi/k2
-
-            MG_phidot = etadot - adotoa * (MG_psi - adotoa * MG_alpha)- Hdot * MG_alpha
-
-        ! Q,R parametrization
-        else if (model == 2 .or. &
-                 model == 3 ) then
-
-            ! calculate the MG functions
-            MGQ     = MG_Q(a,adotoa, model)
-            MGR     = MG_R(a,adotoa, model)
-            MGQdot  = MG_QDot(a,adotoa,model)
-            MGRdot  = MG_RDot(a,adotoa, model)
-
-            ! calculate rhoDelta
-            MG_rhoDelta = dgrho + 3._dl * adotoa * dgq/ k
-
-            ! compute sigma
-            MG_phi      = - MG_rhoDelta * MGQ/(2.d0*k2)
-            sigma       = (etak - k * MG_phi)/adotoa
-            MG_alpha    = sigma/k
-
-            ! adding massive neutrinos contributions
-            fQ=k2+0.5d0*MGQ*(3.d0*(grhob_t+grhoc_t)+4.d0*(grhor_t+grhog_t)+3.d0*(MG_grhonu + MG_gpresnu))
-
-            ! if w_DE /= -1 then this has to be changed
-            f1=k2+0.5d0*(3.d0*(grhob_t+grhoc_t)+4.d0*(grhor_t+grhog_t)+3.d0*(MG_grhonu + MG_gpresnu))
-
-            k2alpha= k * sigma
-
-            term1 = MGQ * f1 * dgq/k
-            term2 = (MGQ - 1.d0) * k2alpha * ( grhob_t+grhoc_t+(4.d0/3.d0)*(grhor_t+grhog_t) + (MG_grhonu + MG_gpresnu) )
-            term3 = -( MGQdot + (MGR-1.d0) * MGQ * adotoa) * MG_rhoDelta
-
-            etadot = (term1 + term2 + term3)/( 2.d0 *fQ)
-
-            z = sigma - 3.d0 * etadot/k
-
-            !MG_psi = MGR * MG_phi - MGQ * 2.d0 * dgpi/k2
-            MG_psi = MGR * MG_phi - MGQ * 1.d0 * dgpi/k2
-            MG_phidot = etadot - adotoa * (MG_psi - adotoa * MG_alpha)- Hdot * MG_alpha
+            ! after setting the Boltzmann hierarchy, compute pinudot (here pinudot = grhonu*pinudot)
+            ! here calculating pidot should be safe, as the only ayprime used do not require Z.
+            call MassiveNuVarsOut(EV, ay, ayprime, a, pidot_sum=pidot_sum)
 
         end if
+
+        ! fill the cache
+        mgcamb_cache%pidot_sum = pidot_sum
+
+        ! calculate z
+        call MGCAMB_compute_z( a, mgcamb_par_cache, mgcamb_cache )
+        z           = mgcamb_cache%z
+        sigmadot    = mgcamb_cache%sigmadot
+        etadot      = mgcamb_cache%etadot
 
         ayprime(2)= k*etadot
 
@@ -2770,7 +2597,7 @@
         if (tempmodel==0) then
             EV%OutputTransfer(Transfer_Weyl) = -(dgrho+3*dgq*adotoa/k)/(EV%Kf(1)*2) - dgpi/2
         else
-            EV%OutputTransfer(Transfer_Weyl) = (MG_psi+MG_phi)*k**2._dl/2._dl
+            EV%OutputTransfer(Transfer_Weyl) = (mgcamb_cache%MG_psi+mgcamb_cache%MG_phi)*k**2._dl/2._dl
         end if
         !< MGCAMB MOD END.
 
@@ -2821,7 +2648,7 @@
             if ( tempmodel ==0 ) then
                 sigmadot = -2*adotoa*sigma-dgs/k+etak
             else
-                sigmadot = k * (MG_psi - adotoa * MG_alpha)
+                sigmadot = mgcamb_cache%sigmadot
             end if
             !< MGCAMB mod end
             
