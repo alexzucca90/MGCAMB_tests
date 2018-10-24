@@ -25,10 +25,9 @@
     ! Oct 2018: MGCAMB updgrade:
     !       fixed a few things in the derivatives of the anisotropic stress
     !
-    
-!***********************************************************
-!* MGCAMB mod: new variables and MG functions
 
+
+    !> MGCAMB MOD START: introducing the mgvariables module
  module mgvariables
   use precision
   use ModelParams!, only :: CP
@@ -392,9 +391,7 @@ end function MG_RDot
 
 
 end module mgvariables
-!* MGCAMB mode: end
-!************************************************************************************
-
+!< MGCAMB MOD END.
 
     module LambdaGeneral
     use precision
@@ -412,26 +409,26 @@ end module mgvariables
     ! http://cosmocoffee.info/viewtopic.php?t=811
     ! http://cosmocoffee.info/viewtopic.php?t=512
     
-!******************************
-! MGCAMB mod: 
-! adding some other variables
-!******************************
+    !******************************
+    ! MGCAMB mod:
+    ! adding some other variables
+    !******************************
 
-! AH: Added but not used !
- logical :: use_tabulated_w = .false.
- ! this parameter is already used in CAMB 2015... I comment the following line
- !real(dl) :: wa_ppf = 0._dl
- real(dl) :: c_Gamma_ppf = 0.4_dl
- integer, parameter :: nwmax = 5000, nde = 2000
- integer :: nw_ppf
- real(dl) w_ppf(nwmax), a_ppf(nwmax), ddw_ppf(nwmax)
- real(dl) rde(nde),ade(nde),ddrde(nde)
- real(dl), parameter :: amin = 1.d-9
- logical :: is_cosmological_constant
- private nde,ddw_ppf,rde,ade,ddrde,amin
+    ! AH: Added but not used !
+     logical :: use_tabulated_w = .false.
+     ! this parameter is already used in CAMB 2015... I comment the following line
+     !real(dl) :: wa_ppf = 0._dl
+     real(dl) :: c_Gamma_ppf = 0.4_dl
+     integer, parameter :: nwmax = 5000, nde = 2000
+     integer :: nw_ppf
+     real(dl) w_ppf(nwmax), a_ppf(nwmax), ddw_ppf(nwmax)
+     real(dl) rde(nde),ade(nde),ddrde(nde)
+     real(dl), parameter :: amin = 1.d-9
+     logical :: is_cosmological_constant
+     private nde,ddw_ppf,rde,ade,ddrde,amin
 
-!* MGCAMB mod: end
-!************************************
+    !* MGCAMB mod: end
+    !************************************
     
     
     
@@ -1324,14 +1321,15 @@ end module mgvariables
     subroutine MassiveNuVarsOut(EV,y,yprime,a,grho,gpres,dgrho,dgq,dgpi, gdpi_diff,pidot_sum,clxnu_all, dgpi_w_sum)
     ! original code
     !subroutine MassiveNuVarsOut(EV,y,yprime,a,grho,gpres,dgrho,dgq,dgpi, gdpi_diff,pidot_sum,clxnu_all)
-
+    !< MGCAMB MOD END
     implicit none
     type(EvolutionVars) EV
     real(dl) :: y(EV%nvar), yprime(EV%nvar),a 
     real(dl), optional :: grho,gpres,dgrho,dgq,dgpi, gdpi_diff,pidot_sum,clxnu_all
-    ! new variables
+    !> MGCAMB MOD START: adding the new variables
     real(dl), optional :: dgpi_w_sum
     real(dl) :: wnu
+    !< MGCAMB MOD END
 
     !grho = a^2 kappa rho
     !gpres = a^2 kappa p
@@ -1356,7 +1354,9 @@ end module mgvariables
         !Get density and pressure as ratio to massless by interpolation from table
         call Nu_background(a*nu_masses(nu_i),rhonu,pnu)
 
+        !> MGCAMB MOD START: calculating wnu
         wnu = pnu/rhonu
+        !< MGCAMB MOD END
 
         if (EV%MassiveNuApprox(nu_i)) then
             clxnu=y(EV%nu_ix(nu_i))
@@ -1390,10 +1390,13 @@ end module mgvariables
         if (present(dgpi)) dgpi = dgpi  + grhonu_t*pinu
         if (present(gdpi_diff)) gdpi_diff = gdpi_diff + pinu*(3*gpnu_t-grhonu_t)
         if (present(pidot_sum)) pidot_sum = pidot_sum + grhonu_t*pinudot
+
+        !> MGCAMB MOD START: calculating dgpi_w_sum
         if (present(dgpi_w_sum)) dgpi_w_sum = dgpi_w_sum + grhonu_t*pinu * (3.d0*wnu + 2.d0)
+        !< MGCAMB MOD END
 
 
-! this must still be multiplied by adotoa
+    ! this must still be multiplied by adotoa
     end do
     if (present(grho)) grho = grho  + grhonu
     if (present(dgrho)) dgrho= dgrho + dgrhonu
@@ -2623,7 +2626,10 @@ end module mgvariables
     !  ayprime is not necessarily GaugeInterface.yprime, so keep them distinct
     use ThermoData
     use MassiveNu
+    !> MGCMAB MOD START: adding mg module
     use mgvariables
+    !< MGCAMB MOD END
+
     implicit none
     type(EvolutionVars) EV
 
@@ -3111,7 +3117,7 @@ end module mgvariables
         if (tempmodel==0) then
             EV%OutputTransfer(Transfer_Weyl) = -(dgrho+3*dgq*adotoa/k)/(EV%Kf(1)*2) - dgpi/2
         else
-            EV%OutputTransfer(Transfer_Weyl) = (MG_Psi+MG_Phi)*k**2._dl/2._dl
+            EV%OutputTransfer(Transfer_Weyl) = (MG_psi+MG_phi)*k**2._dl/2._dl
         end if
         !< MGCAMB MOD END.
 
