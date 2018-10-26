@@ -1,0 +1,8 @@
+Principal developers:
+
+- Alex Zucca: 		Simon Fraser University;
+- Alireza Hojjati:	University of British Columbia;
+- Gong-Bo Zhao:		NAO, Chinese Academy of Science;
+- Levon Pogosian: 	Simon Fraser University;
+- Alessandra Silvestri: Instituut Lorentz Leiden University;
+
