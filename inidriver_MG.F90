@@ -115,8 +115,8 @@ integer :: error
     P%h0     = Ini_Read_Double('hubble')
 
     !> MGCAMB MOD START: reading models and params
-    model = Ini_Read_Int('model',0)
-    GRtrans= Ini_Read_Double('GRtrans',0.d0)
+    model   = Ini_Read_Int('model',0)
+    GRtrans = Ini_Read_Double('GRtrans',0.d0)
 
     if ( model /= 0 ) call print_MGCAMB_header
 
@@ -189,6 +189,23 @@ integer :: error
         print*, '***please choose a model***'
         stop
     end if
+
+    ! background
+    DE_model   = Ini_Read_Int('DE_model', 0)
+
+    write(*,*) "---------------------"
+    write(*,*) "DE Model : ", DE_model
+    write(*,*) "---------------------"
+
+    if ( DE_model == 1 ) then
+        wDE= Ini_Read_Double('wDE',-1.d0)
+    else if ( DE_model == 2 ) then
+        w0= Ini_Read_Double('w0',-1.d0)
+        wa= Ini_Read_Double('wa',-1.d0)
+    else if (DE_model /= 0) then
+        print*, '***please choose a DE model***'
+        stop
+    end if
     !< MGCAMB MOD END
     
 
@@ -209,7 +226,8 @@ integer :: error
         mgcamb_par_cache%omegab = P%omegab
         mgcamb_par_cache%omegac = P%omegac
         mgcamb_par_cache%omegav = P%omegav
-        mgcamb_par_cache%h0 = P%H0
+        mgcamb_par_cache%h0     = P%H0
+        mgcamb_par_cache%h0_Mpc = P%H0 * (1.d3/c)
     end if
     !< MGCAMB MOD END
 

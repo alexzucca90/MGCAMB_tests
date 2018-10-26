@@ -2,6 +2,7 @@ module MGCAMB
     use precision
 
     integer :: model
+    integer :: DE_model
 
     real(dl) :: GRtrans                     !< scale factor at which MG is switched on
     real(dl) :: B1, B2, lambda1_2, lambda2_2, ss
@@ -10,6 +11,9 @@ module MGCAMB
     real(dl) :: beta_star, a_star, xi_star  !< for model 7 (symmetron)
     real(dl) :: beta0, xi0, DilR, DilS, A_2 !< for model 8 and 10 (dilaton)
     real(dl) :: F_R0, FRn                   !< for model 9 (large curvature f(R))
+
+    real(dl) :: wDE             !< constant wDE
+    real(dl) :: w0, wa          !< w0,wa parameters for DE
 
     character(len=(10)) :: MGCAMB_version = 'v 3.0'
 
@@ -37,6 +41,8 @@ module MGCAMB
         real(dl) :: grhoc_t
         real(dl) :: grhog_t
         real(dl) :: grhor_t
+        real(dl) :: grhov_t
+        real(dl) :: gpresv_t
         real(dl) :: grhonu_t
         real(dl) :: gpresnu_t
 
@@ -205,14 +211,23 @@ contains
             fmu = mg_cache%k2+0.5d0*mg_cache%gamma*mg_cache%mu*(3.d0*(mg_cache%grhoc_t+mg_cache%grhob_t) &
                 & + 4.d0*(mg_cache%grhog_t+mg_cache%grhor_t) +3.d0 * (mg_cache%grhonu_t + mg_cache%gpresnu_t ))
 
-            !> adding massive neutrinos contributions, if w_DE is not -1 this has to be changed
-            f1 = mg_cache%k2+1.5d0*( mg_cache%adotoa**2 - mg_cache%Hdot )
+            !> adding massive neutrinos contributions
+
+            !f1 = mg_cache%k2+3.d0*( mg_cache%adotoa**2 - mg_cache%Hdot )
+            f1 = mg_cache%k2+0.5d0*(3.d0*(mg_cache%grhoc_t+mg_cache%grhob_t) &
+                & + 4.d0*(mg_cache%grhog_t+mg_cache%grhor_t) + 3.d0*(mg_cache%grhonu_t+mg_cache%gpresnu_t) &
+                & + 3.d0*(mg_cache%grhov_t+mg_cache%gpresv_t))
 
             term1 = mg_cache%gamma*mg_cache%mu* f1 * mg_cache%dgq/mg_cache%k
 
             !> adding massive neutrinos contribution, if w_DE /= -1 this has to be changed
-            term2 = mg_cache%k2*mg_cache%MG_alpha* (mg_cache%mu* mg_cache%gamma- 1.d0)*(mg_cache%grhoc_t+mg_cache%grhob_t&
-                    & +(4.d0/3.d0)*(mg_cache%grhog_t+mg_cache%grhor_t) + (mg_cache%grhonu_t + mg_cache%gpresnu_t) )
+            term2 = mg_cache%k2*mg_cache%MG_alpha* ((mg_cache%mu* mg_cache%gamma- 1.d0)*(mg_cache%grhoc_t+mg_cache%grhob_t&
+                    & +(4.d0/3.d0)*(mg_cache%grhog_t+mg_cache%grhor_t) + (mg_cache%grhonu_t + mg_cache%gpresnu_t)) &
+                    & - (mg_cache%grhov_t+ mg_cache%gpresv_t))
+
+            !term2 = mg_cache%k2*mg_cache%MG_alpha* (mg_cache%mu* mg_cache%gamma*( mg_cache%grhoc_t+mg_cache%grhob_t&
+            !        & +(4.d0/3.d0)*(mg_cache%grhog_t+mg_cache%grhor_t) + (mg_cache%grhonu_t + mg_cache%gpresnu_t) ) &
+            !        & - 2.d0*(mg_cache%adotoa**2 - mg_cache%Hdot))
 
             term3= (mg_cache%mu * ( mg_cache%gamma -1.d0)* mg_cache%adotoa - mg_cache%gamma*mg_cache%mudot &
                     & - mg_cache%gammadot*mg_cache%mu )*mg_cache%rhoDelta
@@ -249,18 +264,26 @@ contains
                 & 4.d0*(mg_cache%grhor_t+mg_cache%grhog_t)+3.d0*(mg_cache%grhonu_t + mg_cache%gpresnu_t))
 
             ! fixed for w_DE /= -1
-            f1=mg_cache%k2+1.5d0*( mg_cache%adotoa**2 - mg_cache%Hdot )
+            !f1=mg_cache%k2+3.d0*( mg_cache%adotoa**2 - mg_cache%Hdot )
+            f1 = mg_cache%k2+0.5d0*(3.d0*(mg_cache%grhoc_t+mg_cache%grhob_t) &
+                & + 4.d0*(mg_cache%grhog_t+mg_cache%grhor_t) + 3.d0*(mg_cache%grhonu_t+mg_cache%gpresnu_t) &
+                & + 3.d0*(mg_cache%grhov_t+mg_cache%gpresv_t))
 
             k2alpha= mg_cache%k * mg_cache%sigma
 
             term1 = mg_cache%q * f1 * mg_cache%dgq/mg_cache%k
 
-            term2 = (mg_cache%q - 1.d0) * k2alpha * ( mg_cache%grhob_t+mg_cache%grhoc_t+(4.d0/3.d0) &
-                    & *(mg_cache%grhor_t+mg_cache%grhog_t) + (mg_cache%grhonu_t + mg_cache%gpresnu_t) )
+            term2 = k2alpha * ((mg_cache%q - 1.d0) * ( mg_cache%grhob_t+mg_cache%grhoc_t+(4.d0/3.d0) &
+                    & *(mg_cache%grhor_t+mg_cache%grhog_t) + (mg_cache%grhonu_t + mg_cache%gpresnu_t) &
+                    & ) -mg_cache%grhov_t - mg_cache%gpresv_t)
 
-            term3 = -( mg_cache%qdot + (mg_cache%r-1.d0) * mg_cache%q * mg_cache%adotoa) * mg_cache%rhoDelta
+            !term2 = k2alpha * ((mg_cache%q) * ( mg_cache%grhob_t+mg_cache%grhoc_t+(4.d0/3.d0) &
+            !    & *(mg_cache%grhor_t+mg_cache%grhog_t) + (mg_cache%grhonu_t + mg_cache%gpresnu_t)) &
+            !    & - 2.d0 *(mg_cache%adotoa**2 - mg_cache%Hdot))
 
-            mg_cache%etadot = (term1 + term2 + term3)/( 2.d0 * fQ)
+            term3 = -( mg_cache%qdot + (mg_cache%r-1.d0) * mg_cache%q * mg_cache%adotoa ) * mg_cache%rhoDelta
+
+            mg_cache%etadot = (term1 + term2 + term3)/( 2.d0 * fQ )
 
             mg_cache%z = mg_cache%sigma - 3.d0 * mg_cache%etadot/mg_cache%k
 
@@ -772,6 +795,34 @@ contains
 
     end function MGCAMB_Rdot
 
+    ! ---------------------------------------------------------------------------------------------
+    !> Modifying the background
+    subroutine MGCAMB_DarkEnergy( a, mg_par_cache, mg_cache )
+        use precision
+        implicit none
+
+        real(dl) :: a   !< scale factor
+        type(MGCAMB_timestep_cache),  intent(inout) :: mg_cache      !< cache containing the time-dependent quantities
+        type(MGCAMB_parameter_cache), intent(in)   :: mg_par_cache  !< cache containing the parameters
+
+        real(dl) :: wnow
+
+        if ( DE_model == 0 ) then
+            mg_cache%grhov_t = 3.d0*mg_par_cache%h0_Mpc**2 * mg_par_cache%omegav *a**2
+            mg_cache%gpresv_t = - mg_cache%grhov_t
+        else if ( DE_model == 1 ) then
+            mg_cache%grhov_t = 3.d0*mg_par_cache%h0_Mpc**2*mg_par_cache%omegav*a**(-1.d0-3.d0*wDE)
+            mg_cache%gpresv_t = mg_cache%grhov_t * wDE
+        else if (DE_model == 2 ) then
+            wnow = w0+(1.d0-a)*wa
+            mg_cache%grhov_t = 3.d0*mg_par_cache%h0_Mpc**2*mg_par_cache%omegav*a**(-1.d0-3.d0*wnow)
+            mg_cache%gpresv_t = mg_cache%grhov_t * wnow
+        else
+            write(*,*) 'choose a DE model'
+            stop
+        end if
+
+    end subroutine MGCAMB_DarkEnergy
 
     ! ---------------------------------------------------------------------------------------------
     !> Subroutine that prints to screen the MGCAMB header.
@@ -781,10 +832,12 @@ contains
 
         ! print the header:
         write(*,'(a)') "***************************************************************"
-        write(*,'(a)') "     __   ________  ________   __  ______  "
+        write(*,'(a)') "     __  _________  ________   __  ______  "
         write(*,'(a)') "    /  \/  / ____/ / ___/ _ | /  |/  / _ ) "
         write(*,'(a)') "   / /\_/ / /_,-, / /__/ __ |/ /|_/ / _  | "
         write(*,'(a)') "  /_/  /_/_____/  \___/_/ |_/_/  /_/____/  "//" "//MGCAMB_version
+        write(*,'(a)') "  "
+        write(*,'(a)') "        Modified Growth with CAMB "
         write(*,'(a)') "  "
         write(*,'(a)') "***************************************************************"
 
