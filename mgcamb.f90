@@ -4,6 +4,16 @@ module MGCAMB
     integer :: model
     integer :: DE_model
 
+    ! new model selection flags
+    integer :: MG_flag
+    integer :: pure_MG_flag
+    integer :: alt_MG_flag
+    integer :: QSA_flag
+    integer :: mugamma_par
+    integer :: muSigma_par
+    integer :: QR_par
+
+
     real(dl) :: GRtrans                     !< scale factor at which MG is switched on
     real(dl) :: B1, B2, lambda1_2, lambda2_2, ss
     real(dl) :: MGQfix, MGRfix, Qnot, Rnot, sss
@@ -823,6 +833,49 @@ contains
         end if
 
     end subroutine MGCAMB_DarkEnergy
+
+
+    ! ---------------------------------------------------------------------------------------------
+    !> Subroutine that prints to screen the MGCAMB header.
+    subroutine MGCAMB_read_model_params
+        use IniFile
+
+        ! 1. MG_flag
+        MG_flag = Ini_Read_Int('MG_flag', 0)
+
+        if ( MG_flag /= 0 ) then
+            call print_MGCAMB_header
+            write(*,*) '-------------------'
+            write(*,*) 'MG_flag:', MG_flag
+            write(*,*) '-------------------'
+
+            ! 1. pure MG models
+            if ( MG_flag == 1 ) then
+
+                pure_MG_flag = Ini_Read_Int('pure_MG_flag', 1)
+
+                if ( pure_MG_flag == 1 ) then ! mu-gamma
+
+                else if ( pure_MG_flag == 2 ) then ! mu-Sigma
+
+                else if ( pure_MG_flag == 3 ) then
+
+                end if
+
+
+            else if ( MG_flag == 2 ) then
+
+            else if ( MG_flag == 3 ) then
+
+            else
+                write(*,*) ' Please choose a model'
+                stop
+            end if
+
+        end if
+
+
+    end subroutine MGCAMB_read_model_params
 
     ! ---------------------------------------------------------------------------------------------
     !> Subroutine that prints to screen the MGCAMB header.
