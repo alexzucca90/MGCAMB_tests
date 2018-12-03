@@ -1,17 +1,10 @@
-# MGCAMB_tests
-Tests for MGCAMB
+# MGCAMB
+Since Alireza is not working on it anymore, I had to take over the project. 
 
-## 1. Requirements
-MGCAMB has the same requirements as the Default CAMB 
+The master branch will contain the final version. 
 
-## 2. Installing MGCAMB
-Uses simply 
-`$ make camb`
+I'm working on the new_mg_models branch right now.
 
-## 3. Running MGCAMB
-Set the modified growth model and the Dark Energy model in params_MG.ini
-Run the code as usual with
-`$ camb params.ini` 
+The idea is to make MGCAMB with a similar structure as EFTCAMB. Marco and Simone can help a lot in this.
 
-
-
+Alex Zucca: azucca@sfu.ca

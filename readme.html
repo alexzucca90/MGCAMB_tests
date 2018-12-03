@@ -13,7 +13,7 @@
 Code for Anisotropies in the Microwave Background by <A
 HREF="http://cosmologist.info/">Antony Lewis</A> and Anthony
 Challinor. <P>
-This version November 2015.
+This version August 2018.
 <P>
 <FONT SIZE=-1>
 Originally based on CMBFAST developed by Uros Seljak and Matias
@@ -22,19 +22,19 @@ Edmund Bertschinger, Chung-Pei Ma and Paul Bode.
 For latest information on this program see <A HREF="http://camb.info">camb.info</A>.
 </FONT>
 <P>
-CAMB is also supplied as part of the <A HREF="http://cosmologist.info/cosmomc/">CosmoMC</A> parameter estimation package. For an extension including perturbed recombination, 21cm, lensing and number count sources see <A HREF="http://camb.info/sources">CAMB sources</A>.
+CAMB is also supplied as part of the <A HREF="http://cosmologist.info/cosmomc/">CosmoMC</A> parameter estimation package. For an extension including perturbed recombination, 21cm, lensing and number count sources see <A HREF="http://camb.info/sources">CAMB sources</A> (latest in the devel branch on github).
 <P>
 
 <A NAME="compiling">
 <B>Compiling and running</B>
 </P>
-To install and compile yourself you will need a Fortran 90 (or higher) compiler - you can get the free <A HREF="http://gcc.gnu.org/wiki/GFortran">GFortran</A> compiler, or the optimized Intel compiler <em>ifort</em> is installed on many academic clusters and also supports integrated development and debugging in Visual Studio under Windows.
+To install and compile yourself you will need a Fortran 90 (or higher) compiler - you can get the free <A HREF="https://gcc.gnu.org/wiki/GFortranBinaries">gfortran</A> compiler, or the optimized Intel compiler <em>ifort</em> is installed on many academic clusters and also supports integrated development and debugging in Visual Studio under Windows.
  Alternatively you can use CAMB in the pre-configured <A HREF="http://cosmologist.info/CosmoBox">CosmoBox</A> virtual machine. <P>
  To install yourself from the command line:
 <UL>
 <LI><A HREF="http://camb.info/CAMBsubmit.html">Download</A> CAMB
-<LI>Unzip and untar the file (<B>tar xfv CAMB.tar.gz</B>). All files will be extracted to a
-directory called "CAMB".
+<LI>Unzip the file (<B>tar xfv filename </B> for tar.gz). All files will be extracted to a
+directory called "CAMB-xxx".
 <LI>Run <B>make</B> to compile everything you will need. (you may need to
 edit the supplied Makefile, see below)
 <LI>Run <B>./camb params.ini</B>, where params.ini is a file
@@ -44,7 +44,7 @@ edit the supplied Makefile, see below)
 </UL>
 </P>
 <P>
-The Makefile comes set up for gfortran and  ifort compilers. Edit the relevant parts of the Makefile to compile on other systems. If you have Intel's Visual Fortran you can use the projects in the VisualStudio folder, no need to use the Makefile. To run on multi-processor machines add the -openmp (or equivalent) option to the Makefile's FFLAGS parameter to compile a parallelized (OPENMP) version.
+The Makefile comes set up for gfortran and  ifort compilers. Edit the relevant parts of the Makefile to compile on other systems. If you have Intel's Visual Fortran you can use the projects in the VisualStudio folder, no need to use the Makefile. To run on multi-processor machines add the -openmp (or equivalent) option to the Makefile's FFLAGS parameter to compile a parallelized (OPENMP) version. The code is also available from GitHub.
 </P>
 <P>
 Martina Schwind has kindly contributed some <A hREF="Work_with_CAMB_V13_for_AL.pdf">introductory slides</A> with details of program running and internal structure. For some further technical details about the algorithms, equations and code see the <A HREF="http://cosmologist.info/notes/CAMB.pdf">CAMB notes</A>. For a demo of how to use CAMB with the python wrapper see the <A HREF="http://camb.readthedocs.org/en/latest/CAMBdemo.html">demo notebook</A>.
@@ -138,13 +138,92 @@ After modifying any of the source code run <B>make clean</B> before running <B>m
 Run <B>make all</B> to build a library libcamb.a that you can use when
 linking to other programs. (You will also need to include the module files using -I/cambfolder).
 <P>
-You can <A HREF="http://camb.info/test_suite.tar.gz">download</A> a test suite for comparing accuracy with different parameters and code versions. Just extract the file to your CAMB directory and read the readme.
-<P>
 Some details about what different source code files do are given <A HREF="#FILES">below</A>, see also the <A HREF="http://cosmologist.info/notes/CAMB.pdf">CAMB notes</A>.
-
+<P>
+A test suite is included, and will run automatically on <A HREF="https://travis-ci.org/">Travis</A> when committing or making pull requests on the <A HREF="https://github.com/cmbant/CAMB">GitHub repository</A>. Python unit tests are in the pycamb/camb_tests directory, and scripts for comparing outputs for a variety of models (as run on Travis) are in the tests directory.
 <P>
 <A NAME="version">
 <H3>Version history</H3>
+
+<B>August 2018</B><BR>
+<ul>
+  <li>Option to use HMCode 2015 version (thanks Alex Mead)</li>
+  <li><b>accurate_massive_neutrino_transfers</b> option if accurate neutrino transfer functions needed at late time</li>
+  <li>Output text file precision increased</li>
+  <li>Warning if accurate_BB=T but other options not set sensibly for accurate lensing BB</li>
+<LI><A HREF="https://camb.readthedocs.org/en/latest">Python CAMB wrapper</A>:
+<ul>
+  <li>On linux system now builds with ifort if available (~35% faster)</li>
+  <li>More efficient and new vector support for <a href="https://camb.readthedocs.io/en/latest/camb.html?highlight=angular_diameter_distance#camb.CAMBdata.angular_diameter_distance">angular_diameter_distance</a>
+      and related background functions </li>
+  <li><a href="https://camb.readthedocs.io/en/latest/bbn.html">bbn module</a> generalisation to allow more general table interpolation and vector arguments; added <a href="http://www2.iap.fr/users/pitrou/primat.htm">PRIMAT table</a> (thanks Cyril Pitrou)</li>
+   <li>Improvements for default settings in various cases</li>
+   <li><a href="https://camb.readthedocs.io/en/latest/camb.html?highlight=get_background_time_evolution#camb.CAMBdata.get_background_time_evolution">get_background_time_evolution</a> can now get T_b, the baryon temperature</li>
+   <li><a href="https://camb.readthedocs.io/en/latest/camb.html?highlight=save_cmb_power_spectra#camb.CAMBdata.save_cmb_power_spectra">save_cmb_pwoer_spectra</a> convenience function</li>
+  <li>Changes for <a href="https://github.com/JesusTorrado/cobaya">Cobaya</a> compatibility (thanks Jesus Torrado)</li>
+  <li><a href="https://camb.readthedocs.io/en/latest/camb.html?highlight=get_matter_power_interpolator#camb.get_matter_power_interpolator">get_matter_power_interpolator</a>
+      has extrap_kmap to efficiently get tails by extrapolation</li>
+  <li><a href="https://camb.readthedocs.io/en/latest/camb.html#camb.CAMBdata.get_matter_power_interpolator">get_matter_power_interpolator</a>
+      now also available as method of results object for optimization purposes</li>
+  <li>mathutils module with convenience functions like Wigner 3j, pseudo-CL coupling, and fast Gauss-Legendre and x^T C^{-1} x evaluation</li>
+  <li>Doc and example notebook improvements/additional examples and warnings</li>
+</ul>
+</ul>
+
+
+<B>August 2017</B><BR>
+<UL>
+<LI>HMCode bug fix and speed up (thanks Alex Mead)</LI>
+<li>Refactoring in equations.f90 so all scalar source outputs now computed in derivs function; support for custom source functions (as used by python camb.symbolic module)
+<LI><A HREF="https://camb.readthedocs.org/en/latest">Python CAMB wrapper</A>:
+<ul>
+  <li>Added <A href="http://camb.readthedocs.io/en/latest/symbolic.html">camb.symbolic</a> module using sympy, to get equations, convert between gauges, and produce and compile CAMB code from analytic results in different gauges. See the <A hREf="http://nbviewer.jupyter.org/github/cmbant/CAMB/blob/master/pycamb/docs/ScalEqs.ipynb">demo notebook</a> demonstrating how to use this, set custom sources, plot perturbation evolution and calculate angular power spectra of different things.
+  <li>Add <a href="http://camb.readthedocs.io/en/latest/emission_angle.html">camb.emission_angle</a> module to get BB power from emission angle and time delay (<a href="http://arxiv.org/abs/1706.02673">1706.02673</a>)</li>
+  <li>Added <a href="http://camb.readthedocs.io/en/latest/postborn.html">camb.postborn</a> module to get the field rotation power spectrum and associated BB power (<a href="http://arxiv.org/abs/1605.05662">1605.05662</a>)
+  <li>Support for BBN-consistency values of Y<sub>He</sub> by interpolation from table; new tables from Parthenope supplied (thanks Ofelia Pisanti)</li>
+  <li>H_of_z functions now support arrays of redshifts</li>
+  <li>Add nonlinear parameter to model.set_matter_power</li>
+  <li>AccurateReionization is now switched on by default</li>
+  <li>CMB_outputscale and raw_cl options to python CMB power spectra output functions to get CL or DL, and use different units</li>
+  <li>Added get_fsigma8() function</li>
+  <li>Python 3.6 compatibility</li>
+  <li>"pip install camb" now working cleanly</li>
+  <li>Makefile improvements to build pycamb using gfortran even if ifort present (can use "make COMPILER=gfortran" to force gfortran)</li>
+  <li>Bug fixes</li>
+</ul>
+</li>
+</UL>
+
+
+<B>January 2017</B><BR>
+<UL>
+<LI><A HREF="http://camb.readthedocs.io/en/latest/correlations.html">Python CAMB wrapper correlations module</A>:
+ Transform between C<sub>L</sub> and CMB correlation functions; calculate lensed power spectra and correlation functions from unlensed spectra and lensing power spectrum (useful for delensing); calculate matrix of derivatives of lensed power spectra with respect to lensing power and unlensed C<sub>L</sub>.
+<LI>Added halofit_casarini=7 for PKequal dark energy fitting (thanks Luciano Casarini; arXiv:0810.0190, arXiv:1601.07230)
+<LI>Fixed compilation issue with gfortran 6.3
+</UL>
+
+<B>November 2016</B><BR>
+<UL>
+<LI><b>CAMB_SetNeutrinoHierarchy</b> function and python wrapper <b>neutrino_hierarchy</b> option for set_cosmology function (to configure to use two eigenstate approximation to normal or inverted hierarchies)
+<LI>Various misc small bug fixes, improvements and compiler compatibility changes
+</UL>
+
+
+<B>May 2016</B><BR>
+<UL>
+<LI>Added support for <A HREF="http://arxiv.org/abs/1505.07833">HMCODE</A> Halofit version (halofit_version=5; thanks Alex Mead); Takahashi remains the default as before
+<LI><A HREF="https://camb.readthedocs.org/en/latest">Python CAMB wrapper</A>
+<UL>
+<LI>  <b>camb.get_matter_power_interpolator</b> function get 2D spline object for evaluating P(k,z);
+<br>See the <A HREF="http://camb.readthedocs.io/en/latest/CAMBdemo.html">sample notebook</A> for an example of how to use this to calculate a lensing spectrum
+<LI>Result object functions to get unsplined matter power (<b>get_linear_matter_power_spectrum</b>,<b>get_nonlinear_matter_power_spectrum</b>)
+<LI>Result object function to get redshift from conformal time (<b>redshift_at_comoving_radial_distance</b>)
+<LI><b>camb.set_halofit_version</b> to set halofit version;
+<LI>Option to set cosmomc_theta rather than H_0 (thanks Marius Millea)
+<LI> Wigner 3j function for convenience (<b>camb.bispectrum.threej</b>).
+</UL>
+</UL>
 
 <B>November 2015</B><BR>
 <UL>

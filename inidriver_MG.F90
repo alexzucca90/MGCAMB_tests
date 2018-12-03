@@ -14,6 +14,7 @@
     use Bispectrum
     use CAMBmain
     use NonLinear
+
     !> MGCAMB MOD START
     use MGCAMB
     !< MGCAMB MOD END
@@ -26,18 +27,12 @@
     Type(CAMBparams) P
 
     character(LEN=Ini_max_string_len) numstr, VectorFileName, &
-    InputFile, ScalarFileName, TensorFileName, TotalFileName, LensedFileName,&
-    LensedTotFileName, LensPotentialFileName,ScalarCovFileName
+        InputFile, ScalarFileName, TensorFileName, TotalFileName, LensedFileName,&
+        LensedTotFileName, LensPotentialFileName,ScalarCovFileName
     integer i
     character(LEN=Ini_max_string_len) TransferFileNames(max_transfer_redshifts), &
-    MatterPowerFileNames(max_transfer_redshifts), outroot, version_check
+        MatterPowerFileNames(max_transfer_redshifts), outroot, version_check
     real(dl) output_factor, nmassive
-
-!======
-type(CAMBdata) :: data
-integer :: error
-!=======
-
 
 #ifdef WRITE_FITS
     character(LEN=Ini_max_string_len) FITSfilename
@@ -47,10 +42,10 @@ integer :: error
 
     InputFile = ''
     if (GetParamCount() /= 0)  InputFile = GetParam(1)
-    if (InputFile == '') stop 'No parameter input file'
+    if (InputFile == '') error stop 'No parameter input file'
 
     call Ini_Open(InputFile, 1, bad, .false.)
-    if (bad) stop 'Error opening parameter file'
+    if (bad) error stop 'Error opening parameter file'
 
     Ini_fail_on_not_found = .false.
 
@@ -88,7 +83,7 @@ integer :: error
                 if (P%DoLensing) lensing_method = Ini_Read_Int('lensing_method',1)
             end if
             if (P%WantVectors) then
-                if (P%WantScalars .or. P%WantTensors) stop 'Must generate vector modes on their own'
+                if (P%WantScalars .or. P%WantTensors) error stop 'Must generate vector modes on their own'
                 i = Ini_Read_Int('vector_mode')
                 if (i==0) then
                     vec_sig0 = 1
@@ -97,7 +92,7 @@ integer :: error
                     Magnetic = -1
                     vec_sig0 = 0
                 else
-                    stop 'vector_mode must be 0 (regular) or 1 (magnetic)'
+                    error stop 'vector_mode must be 0 (regular) or 1 (magnetic)'
                 end if
             end if
         end if
@@ -114,101 +109,6 @@ integer :: error
 
     P%h0     = Ini_Read_Double('hubble')
 
-    !> MGCAMB MOD START: reading models and params
-    model   = Ini_Read_Int('model',0)
-    GRtrans = Ini_Read_Double('GRtrans',0.d0)
-
-    if ( model /= 0 ) call print_MGCAMB_header
-
-    write(*,*) "---------------------"
-    write(*,*) "Model : ", model
-    write(*,*) "---------------------"
-
-    if (model ==1) then
-        B1= Ini_Read_Double('B1',0.d0)
-        B2= Ini_Read_Double('B2',0.d0)
-        lambda1_2= Ini_Read_Double('lambda1_2',0.d0)
-        lambda2_2= Ini_Read_Double('lambda2_2',0.d0)
-        ss= Ini_Read_Double('ss',0.d0)
-
-    else if (model ==2) then
-        MGQfix= Ini_Read_Double('MGQfix',1.d0)
-        MGRfix= Ini_Read_Double('MGRfix',1.d0)
-
-    else if (model ==3 ) then
-        Qnot= Ini_Read_Double('Qnot',1.d0)
-        Rnot= Ini_Read_Double('Rnot',1.d0)
-        sss = Ini_Read_Double('sss',0.d0)
-
-    else if (model ==4) then
-        B1 = 4.d0/3.d0
-        lambda1_2= Ini_Read_Double('B0',0.d0) ! it is considered as the B0 parameter here
-        lambda1_2 = (lambda1_2*(299792458.d-3)**2)/(2.d0*p%H0**2)
-        B2 = 0.5d0
-        lambda2_2 = B1* lambda1_2
-        ss = 4.d0
-
-    else if (model ==5) then
-        B1 = Ini_Read_Double('beta1',0.d0)
-        lambda1_2= Ini_Read_Double('B0',0.d0)
-        lambda1_2 = (lambda1_2*(299792458.d-3)**2)/(2.d0*p%H0**2)
-        B2 = 2.d0/B1 -1.d0
-        lambda2_2 = B1* lambda1_2
-        ss= Ini_Read_Double('s',0.d0)
-
-    else if (model ==6) then
-        Linder_gamma = Ini_Read_Double('Linder_gamma',0.d0)
-
-    ! New models added in the last version
-    else if (model == 7) then
-        ! SYMMETRON
-        beta_star = Ini_Read_Double('beta_star', 0.d0)
-        xi_star = Ini_Read_Double ('xi_star', 0.d0)
-        a_star = Ini_Read_Double('a_star', 0.d0)
-        GRtrans = a_star
-
-    else if (model == 8) then
-        ! GENERALIZED DILATON
-        beta0 = Ini_Read_Double('beta0', 0.d0)
-        xi0 = Ini_Read_Double('xi0', 0.d0)
-        DilR = Ini_Read_Double('DilR', 0.d0)
-        DilS = Ini_Read_Double('DilS', 0.d0)
-
-    else if (model == 9) then
-        ! HU SAWICKI MODEL
-        F_R0 = Ini_Read_Double('F_R0', 0.d0)
-        FRn = Ini_Read_Double('FRn', 0.d0)
-        beta0 = 1.d0/sqrt(6.d0)
-
-    else if (model ==10) then
-        ! SIMPLE DILATON
-        beta0 = Ini_Read_Double('beta0', 0.d0)
-        A_2 = Ini_Read_Double('A2',0.d0)
-
-    else if (model /= 0) then
-        print*, '***please choose a model***'
-        stop
-    end if
-
-    ! background
-    DE_model   = Ini_Read_Int('DE_model', 0)
-
-    write(*,*) "---------------------"
-    write(*,*) "DE Model : ", DE_model
-    write(*,*) "---------------------"
-
-    if ( DE_model == 1 ) then
-        wDE= Ini_Read_Double('wDE',-1.d0)
-    else if ( DE_model == 2 ) then
-        w0= Ini_Read_Double('w0',-1.d0)
-        wa= Ini_Read_Double('wa',-1.d0)
-    else if (DE_model /= 0) then
-        print*, '***please choose a DE model***'
-        stop
-    end if
-    !< MGCAMB MOD END
-    
-
     if (Ini_Read_Logical('use_physical',.false.)) then
         P%omegab = Ini_Read_Double('ombh2')/(P%H0/100)**2
         P%omegac = Ini_Read_Double('omch2')/(P%H0/100)**2
@@ -222,25 +122,30 @@ integer :: error
     end if
 
     !> MGCAMB MOD START
-    if ( model /= 0 ) then
-        mgcamb_par_cache%omegab = P%omegab
-        mgcamb_par_cache%omegac = P%omegac
-        mgcamb_par_cache%omegav = P%omegav
-        mgcamb_par_cache%h0     = P%H0
-        mgcamb_par_cache%h0_Mpc = P%H0 * (1.d3/c)
-    end if
+    mgcamb_par_cache%omegab = P%omegab
+    mgcamb_par_cache%omegac = P%omegac
+    mgcamb_par_cache%omegav = P%omegav
+    mgcamb_par_cache%h0     = P%H0
+    mgcamb_par_cache%h0_Mpc = P%H0 * (1.d3/c)
+    mgcamb_par_cache%output_root = outroot
     !< MGCAMB MOD END
+
+    !> MGCAMB MOD START: reading models and params
+    call MGCAMB_read_model_params( mgcamb_par_cache )
+    !< MGCAMB MOD END
+
+
 
     P%tcmb   = Ini_Read_Double('temp_cmb',COBE_CMBTemp)
     P%yhe    = Ini_Read_Double('helium_fraction',0.24_dl)
     P%Num_Nu_massless  = Ini_Read_Double('massless_neutrinos')
 
     P%Nu_mass_eigenstates = Ini_Read_Int('nu_mass_eigenstates',1)
-    if (P%Nu_mass_eigenstates > max_nu) stop 'too many mass eigenstates'
+    if (P%Nu_mass_eigenstates > max_nu) error stop 'too many mass eigenstates'
 
     numstr = Ini_Read_String('massive_neutrinos')
     read(numstr, *) nmassive
-    if (abs(nmassive-nint(nmassive))>1e-6) stop 'massive_neutrinos should now be integer (or integer array)'
+    if (abs(nmassive-nint(nmassive))>1e-6) error stop 'massive_neutrinos should now be integer (or integer array)'
     read(numstr,*, end=100, err=100) P%Nu_Mass_numbers(1:P%Nu_mass_eigenstates)
     P%Num_Nu_massive = sum(P%Nu_Mass_numbers(1:P%Nu_mass_eigenstates))
 
@@ -250,12 +155,12 @@ integer :: error
         if (P%share_delta_neff) then
             if (numstr/='') write (*,*) 'WARNING: nu_mass_degeneracies ignored when share_delta_neff'
         else
-            if (numstr=='') stop 'must give degeneracies for each eigenstate if share_delta_neff=F'
+            if (numstr=='') error stop 'must give degeneracies for each eigenstate if share_delta_neff=F'
             read(numstr,*) P%Nu_mass_degeneracies(1:P%Nu_mass_eigenstates)
         end if
         numstr = Ini_Read_String('nu_mass_fractions')
         if (numstr=='') then
-            if (P%Nu_mass_eigenstates >1) stop 'must give nu_mass_fractions for the eigenstates'
+            if (P%Nu_mass_eigenstates >1) error stop 'must give nu_mass_fractions for the eigenstates'
             P%Nu_mass_fractions(1)=1
         else
             read(numstr,*) P%Nu_mass_fractions(1:P%Nu_mass_eigenstates)
@@ -265,12 +170,17 @@ integer :: error
     !JD 08/13 begin changes for nonlinear lensing of CMB + LSS compatibility
     !P%Transfer%redshifts -> P%Transfer%PK_redshifts and P%Transfer%num_redshifts -> P%Transfer%PK_num_redshifts
     !in the P%WantTransfer loop.
-    if (((P%NonLinear==NonLinear_lens .or. P%NonLinear==NonLinear_both) .and. P%DoLensing) &
-    .or. P%PK_WantTransfer) then
+    if (((P%NonLinear==NonLinear_lens .or. P%NonLinear==NonLinear_both) .and. P%DoLensing) .or. P%PK_WantTransfer) then
         P%Transfer%high_precision=  Ini_Read_Logical('transfer_high_precision',.false.)
     else
         P%transfer%high_precision = .false.
     endif
+    if (P%PK_WantTransfer) then
+        P%Transfer%accurate_massive_neutrinos = Ini_Read_Logical('accurate_massive_neutrino_transfers',.false.)
+    else
+        P%Transfer%accurate_massive_neutrinos = .false.
+    end if
+
     if (P%NonLinear/=NonLinear_none) call NonLinear_ReadParams(DefIni)
 
     if (P%PK_WantTransfer)  then
@@ -279,9 +189,9 @@ integer :: error
         P%transfer%k_per_logint  =  Ini_Read_Int('transfer_k_per_logint')
         P%transfer%PK_num_redshifts =  Ini_Read_Int('transfer_num_redshifts')
 
-        transfer_interp_matterpower = Ini_Read_Logical('transfer_interp_matterpower ', transfer_interp_matterpower)
+        transfer_interp_matterpower = Ini_Read_Logical('transfer_interp_matterpower', transfer_interp_matterpower)
         transfer_power_var = Ini_read_int('transfer_power_var',transfer_power_var)
-        if (P%transfer%PK_num_redshifts > max_transfer_redshifts) stop 'Too many redshifts'
+        if (P%transfer%PK_num_redshifts > max_transfer_redshifts) error stop 'Too many redshifts'
         do i=1, P%transfer%PK_num_redshifts
             P%transfer%PK_redshifts(i)  = Ini_Read_Double_Array('transfer_redshift',i,0._dl)
             transferFileNames(i)     = Ini_Read_String_Array('transfer_filename',i)
@@ -293,9 +203,9 @@ integer :: error
                 MatterPowerFilenames(i) =  trim(numcat('matterpower_',i))//'.dat'
             end if
             if (TransferFileNames(i)/= '') &
-            TransferFileNames(i) = trim(outroot)//TransferFileNames(i)
+                TransferFileNames(i) = trim(outroot)//TransferFileNames(i)
             if (MatterPowerFilenames(i) /= '') &
-            MatterPowerFilenames(i)=trim(outroot)//MatterPowerFilenames(i)
+                MatterPowerFilenames(i)=trim(outroot)//MatterPowerFilenames(i)
         end do
     else
         P%Transfer%PK_num_redshifts = 1
@@ -322,7 +232,7 @@ integer :: error
     call Recombination_ReadParams(P%Recomb, DefIni)
     if (Ini_HasKey('recombination')) then
         i = Ini_Read_Int('recombination',1)
-        if (i/=1) stop 'recombination option deprecated'
+        if (i/=1) error stop 'recombination option deprecated'
     end if
 
     call Bispectrum_ReadParams(BispectrumParams, DefIni, outroot)
@@ -381,6 +291,10 @@ integer :: error
     P%AccuratePolarization = Ini_Read_Logical('accurate_polarization',.true.)
     P%AccurateReionization = Ini_Read_Logical('accurate_reionization',.false.)
     P%AccurateBB = Ini_Read_Logical('accurate_BB',.false.)
+    if (P%AccurateBB .and. P%WantCls .and. (P%Max_l < 3500 .or. &
+        (P%NonLinear/=NonLinear_lens .and. P%NonLinear/=NonLinear_both) .or. P%Max_eta_k < 18000)) &
+        write(*,*) 'WARNING: for accurate lensing BB you need high l_max_scalar, k_eta_max_scalar and non-linear lensing'
+
     P%DerivedParameters = Ini_Read_Logical('derived_parameters',.true.)
 
     version_check = Ini_Read_String('version_check')
@@ -393,7 +307,7 @@ integer :: error
     !Mess here to fix typo with backwards compatibility
     if (Ini_HasKey('do_late_rad_trunction')) then
         DoLateRadTruncation = Ini_Read_Logical('do_late_rad_trunction',.true.)
-        if (Ini_HasKey('do_late_rad_truncation')) stop 'check do_late_rad_xxxx'
+        if (Ini_HasKey('do_late_rad_truncation')) error stop 'check do_late_rad_xxxx'
     else
         DoLateRadTruncation = Ini_Read_Logical('do_late_rad_truncation',.true.)
     end if
@@ -405,9 +319,21 @@ integer :: error
     end if
     FeedbackLevel = Ini_Read_Int('feedback_level',FeedbackLevel)
 
+    output_file_headers = Ini_Read_Logical('output_file_headers',output_file_headers)
+
     P%MassiveNuMethod  = Ini_Read_Int('massive_nu_approx',Nu_best)
 
+
+!> MGCAMB MOD START: suppress parallelization in debug
+#ifdef DEBUG
+    ! set serial execution, problems creating the files otherwise.
+    ThreadNum      = 1
+#else
+    ! normal operations:
     ThreadNum      = Ini_Read_Int('number_of_threads',ThreadNum)
+#endif
+!< MGCAMB MOD END.
+
     use_spline_template = Ini_Read_Logical('use_spline_template',use_spline_template)
 
     if (do_bispectrum) then
@@ -425,35 +351,16 @@ integer :: error
 
     call Ini_Close
 
-    if (.not. CAMB_ValidateParams(P)) stop 'Stopped due to parameter error'
+    if (.not. CAMB_ValidateParams(P)) error stop 'Stopped due to parameter error'
 
 #ifdef RUNIDLE
     call SetIdle
 #endif
 
-    if (global_error_flag==0) then
-
-call CAMB_GetResults(P)
-!=======
-!call CAMB_InitCAMBdata(data)
-!data%Params = P
-
-! Do hard work in calculating
-!call CAMB_GetTransfers(P, data, error)
-!write(*,*)"# sources: ", data%ClTransScal%NumSources
-!Print *, "ERRORS :", error!
-
-!write(*,*) "Delta_p_l_k: # p = ", size(data%ClTransScal%delta_p_l_k,1), &
-!"# l = ", size(data%ClTransScal%delta_p_l_k,2), "# k = ",size(data%ClTransScal%delta_p_l_k,3)
-
-! Calculate power spectra
-!call CAMB_TransfersToPowers(data)
-
-!=======
-end if
+    if (global_error_flag==0) call CAMB_GetResults(P)
     if (global_error_flag/=0) then
-        write (*,*) 'Error result '//trim(global_error_message)
-        stop
+        write(*,*) 'Error result '//trim(global_error_message)
+        error stop
     endif
 
     if (P%PK_WantTransfer) then
@@ -464,7 +371,7 @@ end if
 
     if (P%WantCls) then
         call output_cl_files(ScalarFileName, ScalarCovFileName, TensorFileName, TotalFileName, &
-        LensedFileName, LensedTotFilename, output_factor)
+            LensedFileName, LensedTotFilename, output_factor)
 
         call output_lens_pot_files(LensPotentialFileName, output_factor)
 
