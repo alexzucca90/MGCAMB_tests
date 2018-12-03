@@ -16,15 +16,6 @@
     !            optimized neutrino sampling, and reorganised neutrino integration functions
     ! Feb 2013: fixed various issues with accuracy at larger neutrino masses
     ! Mar 2014: fixes for tensors with massive neutrinos
-    
-    ! Feb 2016: MGCAMB upgrade and new models.
-    !           Fixed some issues with ISW effect
-    !           All the MG functions are now at the beginning of the file in the mgvariables module
-    !           By Alex Zucca azucca@sfu.ca
-    !
-    ! Oct 2018: MGCAMB updgrade:
-    !       fixed a few things in the derivatives of the anisotropic stress
-    !
 
     module LambdaGeneral
     use precision
@@ -34,32 +25,13 @@
     real(dl) :: cs2_lam = 1_dl
     !comoving sound speed. Always exactly 1 for quintessence
     !(otherwise assumed constant, though this is almost certainly unrealistic)
-    
+
     real(dl), parameter :: wa_ppf = 0._dl !Not used here, just for compatibility with e.g. halofit
 
     logical :: w_perturb = .true.
     !If you are tempted to set this = .false. read
     ! http://cosmocoffee.info/viewtopic.php?t=811
     ! http://cosmocoffee.info/viewtopic.php?t=512
-    
-
-    !> MGCAMB MOD START: adding some variables
-    ! AH: Added but not used !
-     logical :: use_tabulated_w = .false.
-     ! this parameter is already used in CAMB 2015... I comment the following line
-     !real(dl) :: wa_ppf = 0._dl
-     real(dl) :: c_Gamma_ppf = 0.4_dl
-     integer, parameter :: nwmax = 5000, nde = 2000
-     integer :: nw_ppf
-     real(dl) w_ppf(nwmax), a_ppf(nwmax), ddw_ppf(nwmax)
-     real(dl) rde(nde),ade(nde),ddrde(nde)
-     real(dl), parameter :: amin = 1.d-9
-     logical :: is_cosmological_constant
-     private nde,ddw_ppf,rde,ade,ddrde,amin
-    !< MGCAMB MOD END
-    
-    
-    
 
     contains
 
@@ -100,6 +72,7 @@
     use ModelParams
     use MassiveNu
     use LambdaGeneral
+
     !> MGCAMB MOD START
     use MGCAMB
     !< MDGCAMB MOD END
@@ -120,13 +93,13 @@
     grhoa2=grhok*a2+(grhoc+grhob)*a+grhog+grhornomass
 
     !> MGCAMB MOD START: modifying the background
-    if ( model == 0 ) then
+    if ( MG_flag == 0 ) then
         if (w_lam == -1._dl) then
             grhoa2=grhoa2+grhov*a2**2
         else
             grhoa2=grhoa2+grhov*a**(1-3*w_lam)
         end if
-    else if ( model /= 0 ) then !< MGCAMB modifies the background as well
+    else if ( MG_flag /= 0 ) then !< MGCAMB modifies the background as well
         call MGCAMB_DarkEnergy( a, mgcamb_par_cache, mgcamb_cache )
         grhoa2=grhoa2+mgcamb_cache%grhov_t*a2
     end if
@@ -176,11 +149,11 @@
     real(dl) :: vec_sig0 = 1._dl
     !Vector mode shear
     integer, parameter :: max_l_evolve = 256 !Maximum l we are ever likely to propagate
-    !Note higher values increase size of Evolution vars, hence memory
+    !Note higher values increase size of Evolution vars, hence memoryWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
 
     !Supported scalar initial condition flags
     integer, parameter :: initial_adiabatic=1, initial_iso_CDM=2, &
-    initial_iso_baryon=3,  initial_iso_neutrino=4, initial_iso_neutrino_vel=5, initial_vector = 0
+        initial_iso_baryon=3,  initial_iso_neutrino=4, initial_iso_neutrino_vel=5, initial_vector = 0
     integer, parameter :: initial_nummodes =  initial_iso_neutrino_vel
 
     type EvolutionVars
@@ -235,7 +208,7 @@
         !Tensor vars
         real(dl) aux_buf
 
-        real(dl) pig, pigdot !For tight coupling
+        real(dl) pig, pigdot
         real(dl) poltruncfac
 
         logical no_nu_multpoles, no_phot_multpoles
@@ -245,16 +218,46 @@
         real(dl) denlk(max_l_evolve),denlk2(max_l_evolve), polfack(max_l_evolve)
         real(dl) Kf(max_l_evolve)
 
-        integer E_ix, B_ix !tensor polarization indices
+        integer E_ix, B_ix !tensor polarizatisdon indices
         real(dl) denlkt(4,max_l_evolve),Kft(max_l_evolve)
         real, pointer :: OutputTransfer(:) => null()
+        real(dl), pointer :: OutputSources(:) => null()
+        real(dl), pointer :: CustomSources(:) => null()
+
     end type EvolutionVars
+
+    ABSTRACT INTERFACE
+    SUBROUTINE TSource_func(sources, tau, a, adotoa, grho, gpres,w_lam, cs2_lam,  &
+        grhob_t,grhor_t,grhoc_t,grhog_t,grhov_t,grhonu_t, &
+        k,etak, etakdot, phi, phidot, sigma, sigmadot, &
+        dgrho, clxg,clxb,clxc,clxr, clxnu, clxde, delta_p_b, &
+        dgq, qg, qr, qde, vb, qgdot, qrdot, vbdot, &
+        dgpi, pig, pir, pigdot, pirdot, diff_rhopi, &
+        polter, polterdot, polterddot, octg, octgdot, E, Edot, &
+        opacity, dopacity, ddopacity, visibility, dvisibility, ddvisibility, exptau, &
+        tau0, tau_maxvis, Kf, f_K)
+    real*8, intent(out) :: sources(:)
+    real*8, intent(in) :: tau, a, adotoa, grho, gpres,w_lam, cs2_lam,  &
+        grhob_t,grhor_t,grhoc_t,grhog_t,grhov_t,grhonu_t, &
+        k,etak, etakdot, phi, phidot, sigma, sigmadot, &
+        dgrho, clxg,clxb,clxc, clxr, clxnu, clxde, delta_p_b, &
+        dgq, qg, qr, qde, vb, qgdot, qrdot, vbdot, &
+        dgpi, pig, pir, pigdot, pirdot, diff_rhopi, &
+        polter, polterdot, polterddot, octg, octgdot, E(2:3), Edot(2:3), &
+        opacity, dopacity, ddopacity, visibility, dvisibility, ddvisibility, exptau, &
+        tau0, tau_maxvis
+    REAL*8, intent(in) :: Kf(*)
+    real*8, external :: f_K
+    END SUBROUTINE TSource_func
+    END INTERFACE
+
+    procedure(TSource_func), pointer :: custom_sources_func => null()
 
     !precalculated arrays
     real(dl) polfac(max_l_evolve),denl(max_l_evolve),vecfac(max_l_evolve),vecfacpol(max_l_evolve)
 
     real(dl), parameter :: ep0=1.0d-2
-    integer, parameter :: lmaxnu_high_ktau=3
+    integer, parameter :: lmaxnu_high_ktau=4 !Jan2015, increased from 3 to fix mpk for mnu~6eV
 
     real(dl) epsw
     real(dl) nu_tau_notmassless(nqmax0+1,max_nu), nu_tau_nonrelativistic(max_nu),nu_tau_massive(max_nu)
@@ -269,10 +272,10 @@
     call dverk(EV,EV%ScalEqsToPropagate,derivs,tau,y,tauend,tol1,ind,c,EV%nvar,w)
     if (ind==-3) then
         call GlobalError('Dverk error -3: the subroutine was unable  to  satisfy  the  error ' &
-        //'requirement  with a particular step-size that is less than or * ' &
-        //'equal to hmin, which may mean that tol is too small' &
-        //'--- but most likely you''ve messed up the y array indexing; ' &
-        //'compiling with bounds checking may (or may not) help find the problem.',error_evolution)
+            //'requirement  with a particular step-size that is less than or * ' &
+            //'equal to hmin, which may mean that tol is too small' &
+            //'--- but most likely you''ve messed up the y array indexing; ' &
+            //'compiling with bounds checking may (or may not) help find the problem.',error_evolution)
     end if
     end subroutine GaugeInterface_ScalEv
 
@@ -294,6 +297,11 @@
     end function next_nu_nq
 
     recursive subroutine GaugeInterface_EvolveScal(EV,tau,y,tauend,tol1,ind,c,w)
+
+    !> MGCAMB MOD START
+    !use MGCAMB
+    !< MGCAMB MOD END
+
     use ThermoData
     type(EvolutionVars) EV, EVout
     real(dl) c(24),w(EV%nvar,9), y(EV%nvar), yout(EV%nvar), tol1, tau, tauend
@@ -333,16 +341,19 @@
         end do
     end if
 
+    !> MGCAMB MOD START
+    !if (DoLateRadTruncation .and. MG_flag == 0) then
     if (DoLateRadTruncation) then
+    !< MGCAMB MOD END
         if (.not. EV%no_nu_multpoles) & !!.and. .not. EV%has_nu_relativistic .and. tau_switch_nu_massless ==noSwitch)  &
-        tau_switch_no_nu_multpoles=max(15/EV%k_buf*AccuracyBoost,min(taurend,matter_verydom_tau))
+            tau_switch_no_nu_multpoles=max(15/EV%k_buf*AccuracyBoost,min(taurend,matter_verydom_tau))
 
         if (.not. EV%no_phot_multpoles .and. (.not.CP%WantCls .or. EV%k_buf>0.03*AccuracyBoost)) &
-        tau_switch_no_phot_multpoles =max(15/EV%k_buf,taurend)*AccuracyBoost
+            tau_switch_no_phot_multpoles =max(15/EV%k_buf,taurend)*AccuracyBoost
     end if
 
     next_switch = min(tau_switch_ktau, tau_switch_nu_massless,EV%TightSwitchoffTime, tau_switch_nu_massive, &
-    tau_switch_no_nu_multpoles, tau_switch_no_phot_multpoles, tau_switch_nu_nonrel,noSwitch)
+        tau_switch_no_nu_multpoles, tau_switch_no_phot_multpoles, tau_switch_nu_nonrel,noSwitch)
 
     if (next_switch < tauend) then
         if (next_switch > tau+smallTime) then
@@ -369,14 +380,14 @@
                 ! Francis-Yan Cyr-Racine November 2010
 
                 y(EV%g_ix+3) = (3._dl/7._dl)*y(EV%g_ix+2)*(EV%k_buf/opacity)*(1._dl+dopacity/opacity**2) + &
-                (3._dl/7._dl)*EV%pigdot*(EV%k_buf/opacity**2)*(-1._dl)
+                    (3._dl/7._dl)*EV%pigdot*(EV%k_buf/opacity**2)*(-1._dl)
 
                 y(EV%polind+2) = EV%pig/4 + EV%pigdot*(1._dl/opacity)*(-5._dl/8._dl- &
-                (25._dl/16._dl)*dopacity/opacity**2) + &
-                EV%pig*(EV%k_buf/opacity)**2*(-5._dl/56._dl)
+                    (25._dl/16._dl)*dopacity/opacity**2) + &
+                    EV%pig*(EV%k_buf/opacity)**2*(-5._dl/56._dl)
                 y(EV%polind+3) = (3._dl/7._dl)*(EV%k_buf/opacity)*y(EV%polind+2)*(1._dl + &
-                dopacity/opacity**2) + (3._dl/7._dl)*(EV%k_buf/opacity**2)*((EV%pigdot/4._dl)* &
-                (1._dl+(5._dl/2._dl)*dopacity/opacity**2))*(-1._dl)
+                    dopacity/opacity**2) + (3._dl/7._dl)*(EV%k_buf/opacity**2)*((EV%pigdot/4._dl)* &
+                    (1._dl+(5._dl/2._dl)*dopacity/opacity**2))*(-1._dl)
             else
                 y(EV%g_ix+3) = 3./7*y(EV%g_ix+2)*EV%k_buf/opacity
                 y(EV%polind+2) = EV%pig/4
@@ -385,7 +396,7 @@
         else if (next_switch==tau_switch_ktau) then
             !k tau >> 1, evolve massless neutrino effective fluid up to l=2
             EVout%high_ktau_neutrino_approx=.true.
-            EV%nq(1:CP%Nu_mass_eigenstates) = nqmax
+            EVout%nq(1:CP%Nu_mass_eigenstates) = nqmax
             call SetupScalarArrayIndices(EVout)
             call CopyScalarVariableArray(y,yout, EV, EVout)
             y=yout
@@ -394,13 +405,13 @@
             !Mass starts to become important, start evolving next momentum mode
             do nu_i = 1, CP%Nu_mass_eigenstates
                 if (EV%nq(nu_i) /= nqmax .and. &
-                next_switch == nu_tau_notmassless(next_nu_nq(EV%nq(nu_i)),nu_i)) then
-                    EVOut%nq(nu_i) = next_nu_nq(EV%nq(nu_i))
-                    call SetupScalarArrayIndices(EVout)
-                    call CopyScalarVariableArray(y,yout, EV, EVout)
-                    EV=EVout
-                    y=yout
-                    exit
+                    next_switch == nu_tau_notmassless(next_nu_nq(EV%nq(nu_i)),nu_i)) then
+                EVOut%nq(nu_i) = next_nu_nq(EV%nq(nu_i))
+                call SetupScalarArrayIndices(EVout)
+                call CopyScalarVariableArray(y,yout, EV, EVout)
+                EV=EVout
+                y=yout
+                exit
                 end if
             end do
         else if (next_switch == tau_switch_nu_nonrel) then
@@ -423,7 +434,10 @@
                     exit
                 end if
             end do
+        !> MGCAMB MOD START:
+        !else if (next_switch==tau_switch_no_nu_multpoles .and. MG_flag==0) then
         else if (next_switch==tau_switch_no_nu_multpoles) then
+        !< MGCAMB MOD END
             !Turn off neutrino hierarchies at late time where slow and not needed.
             ind=1
             EVout%no_nu_multpoles=.true.
@@ -432,7 +446,11 @@
             call CopyScalarVariableArray(y,yout, EV, EVout)
             y=yout
             EV=EVout
+
+        !> MGCAMB MOD START
+        !else if (next_switch==tau_switch_no_phot_multpoles .and. MG_flag == 0) then
         else if (next_switch==tau_switch_no_phot_multpoles) then
+        !< MGCAMB MOD END
             !Turn off photon hierarchies at late time where slow and not needed.
             ind=1
             EVout%no_phot_multpoles=.true.
@@ -573,8 +591,8 @@
     maxeq = maxeq +  (EV%lmaxg+1)+(EV%lmaxnr+1)+EV%lmaxgpol-1
 
     !Dark energy
-    !> MGCAMB MOD START: w perturbed only in model 0
-    if ( w_lam /= -1 .and. w_Perturb .and. model ==0 ) then
+    !> MCAMB MOD START: DE perturbed only in MG_flag = 0
+    if ( w_lam /= -1 .and. w_Perturb .and. MG_flag == 0 ) then
         EV%w_ix = neq+1
         neq=neq+2
         maxeq=maxeq+2
@@ -597,16 +615,14 @@
 
         do nu_i=1, CP%Nu_Mass_eigenstates
             if (EV%high_ktau_neutrino_approx) then
-                if (HighAccuracyDefault .and. CP%WantTransfer .and. EV%q < 1.d0) then
-                    EV%lmaxnu_tau(nu_i)=max(4,lmaxnu_high_ktau)
-                else
-                    EV%lmaxnu_tau(nu_i)=lmaxnu_high_ktau
-                end if
+                EV%lmaxnu_tau(nu_i) = lmaxnu_high_ktau *lAccuracyBoost
+                if (CP%Transfer%accurate_massive_neutrinos) EV%lmaxnu_tau(nu_i) = EV%lmaxnu_tau(nu_i) *3
             else
                 EV%lmaxnu_tau(nu_i) =max(min(nint(0.8_dl*EV%q*nu_tau_nonrelativistic(nu_i)*lAccuracyBoost),EV%lmaxnu),3)
                 !!!Feb13tweak
                 if (EV%nu_nonrelativistic(nu_i)) EV%lmaxnu_tau(nu_i)=min(EV%lmaxnu_tau(nu_i),nint(4*lAccuracyBoost))
             end if
+            if (nu_masses(nu_i) > 5000 .and. CP%Transfer%high_precision) EV%lmaxnu_tau(nu_i) = EV%lmaxnu_tau(nu_i)*2 !megadamping
             EV%lmaxnu_tau(nu_i)=min(EV%lmaxnu,EV%lmaxnu_tau(nu_i))
 
             EV%nu_ix(nu_i)=neq+1
@@ -690,7 +706,7 @@
                     pert_scale=(nu_masses(nu_i)/q)**2/2
                     lmax = min(lmax,EV%lmaxnu_pert)
                     yout(ind2:ind2+lmax) = yout(ind2:ind2+lmax) &
-                    + y(EV%nu_pert_ix:EV%nu_pert_ix+lmax)*pert_scale
+                        + y(EV%nu_pert_ix:EV%nu_pert_ix+lmax)*pert_scale
                 end do
             end if
         end do
@@ -873,7 +889,7 @@
 
         EV%poltruncfac=real(EV%lmaxgpol,dl)/max(1,(EV%lmaxgpol-2))
         EV%MaxlNeeded=max(EV%lmaxg,EV%lmaxnr,EV%lmaxgpol,EV%lmaxnu)
-        if (EV%MaxlNeeded > max_l_evolve) stop 'Need to increase max_l_evolve'
+        if (EV%MaxlNeeded > max_l_evolve) call MpiStop('Need to increase max_l_evolve')
         call SetupScalarArrayIndices(EV,EV%nvar)
         if (CP%closed) EV%nvar=EV%nvar+1 !so can reference lmax+1 with zero coefficient
         EV%lmaxt=0
@@ -900,7 +916,7 @@
             EV%lmaxnut=min(EV%FirstZerolForBeta-1,EV%lmaxnut)
         end if
         EV%MaxlNeededt=max(EV%lmaxpolt,EV%lmaxt, EV%lmaxnrt, EV%lmaxnut)
-        if (EV%MaxlNeededt > max_l_evolve) stop 'Need to increase max_l_evolve'
+        if (EV%MaxlNeededt > max_l_evolve) call MpiStop('Need to increase max_l_evolve')
         call SetupTensorArrayIndices(EV, EV%nvart)
     else
         EV%nvart=0
@@ -917,7 +933,7 @@
 
         EV%nvarv=EV%nvarv+EV%lmaxnrv
         if (CP%Num_Nu_massive /= 0 ) then
-            stop 'massive neutrinos not supported for vector modes'
+            call MpiStop('massive neutrinos not supported for vector modes')
         end if
     else
         EV%nvarv=0
@@ -970,15 +986,15 @@
     end subroutine SwitchToMassiveNuApprox
 
     !> MGCAMB MOD START: compatibility with massive neutrinos
-    subroutine MassiveNuVarsOut(EV,y,yprime,a,grho,gpres,dgrho,dgq,dgpi, gdpi_diff,pidot_sum,clxnu_all, dgpi_w_sum)
-    ! original code
-    !subroutine MassiveNuVarsOut(EV,y,yprime,a,grho,gpres,dgrho,dgq,dgpi, gdpi_diff,pidot_sum,clxnu_all)
+    !subroutine MassiveNuVarsOut(EV,y,yprime,a,grho,gpres,dgrho,dgq,dgpi, dgpi_diff,pidot_sum,clxnu_all)
+    subroutine MassiveNuVarsOut(EV,y,yprime,a,grho,gpres,dgrho,dgq,dgpi, dgpi_diff,pidot_sum,clxnu_all, dgpi_w_sum)
     !< MGCAMB MOD END
     implicit none
     type(EvolutionVars) EV
-    real(dl) :: y(EV%nvar), yprime(EV%nvar),a 
-    real(dl), optional :: grho,gpres,dgrho,dgq,dgpi, gdpi_diff,pidot_sum,clxnu_all
-    !> MGCAMB MOD START: adding the new variables
+    real(dl) :: y(EV%nvar), yprime(EV%nvar),a
+    real(dl), optional :: grho,gpres,dgrho,dgq,dgpi, dgpi_diff,pidot_sum,clxnu_all
+
+    !> MGCAMB MOD START
     real(dl), optional :: dgpi_w_sum
     real(dl) :: wnu
     !< MGCAMB MOD END
@@ -990,7 +1006,6 @@
     !dgq = a^2 kappa q (heat flux)
     !dgpi = a^2 kappa pi (anisotropic stress)
     !dgpi_diff = a^2 kappa (3*p -rho)*pi
-
 
     integer nu_i
     real(dl) pinudot,grhormass_t, rhonu, pnu,  rhonudot
@@ -1040,15 +1055,13 @@
         dgrhonu= dgrhonu + grhonu_t*clxnu
         if (present(dgq)) dgq  = dgq   + grhonu_t*qnu
         if (present(dgpi)) dgpi = dgpi  + grhonu_t*pinu
-        if (present(gdpi_diff)) gdpi_diff = gdpi_diff + pinu*(3*gpnu_t-grhonu_t)
+        if (present(dgpi_diff)) dgpi_diff = dgpi_diff + pinu*(3*gpnu_t-grhonu_t)
         if (present(pidot_sum)) pidot_sum = pidot_sum + grhonu_t*pinudot
 
         !> MGCAMB MOD START: calculating dgpi_w_sum
         if (present(dgpi_w_sum)) dgpi_w_sum = dgpi_w_sum + grhonu_t*pinu * (3.d0*wnu + 2.d0)
         !< MGCAMB MOD END
 
-
-    ! this must still be multiplied by adotoa
     end do
     if (present(grho)) grho = grho  + grhonu
     if (present(dgrho)) dgrho= dgrho + dgrhonu
@@ -1161,7 +1174,7 @@
     real(dl) pinu,q,aq,v
     integer iq, ind
 
-    if (EV%nq(nu_i)/=nqmax) stop 'Nu_pi: nq/=nqmax'
+    if (EV%nq(nu_i)/=nqmax) call MpiStop('Nu_pi: nq/=nqmax')
     pinu=0
     ind=EV%nu_ix(nu_i)+2
     am=a*nu_masses(nu_i)
@@ -1192,7 +1205,7 @@
     ind=EV%nu_ix(nu_i)
     G11=0._dl
     G30=0._dl
-    if (EV%nq(nu_i)/=nqmax) stop 'Nu_Intvsq nq/=nqmax0'
+    if (EV%nq(nu_i)/=nqmax) call MpiStop('Nu_Intvsq nq/=nqmax0')
     do iq=1, EV%nq(nu_i)
         q=nu_q(iq)
         aq=am/q
@@ -1226,7 +1239,6 @@
         !Get density and pressure as ratio to massless by interpolation from table
         call Nu_background(a*nu_masses(nu_i),rhonu,pnu)
 
-
         if (EV%MassiveNuApprox(nu_i)) then
             clxnu=y(EV%nu_ix(nu_i))
             qnu=y(EV%nu_ix(nu_i)+2)
@@ -1254,443 +1266,32 @@
     end subroutine MassiveNuVars
 
     !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-    subroutine output(EV,y, j,tau,sources)
+    subroutine output(EV,y, tau,sources, num_custom_sources)
     use ThermoData
-    use lvalues
-    use ModelData
-    use MGCAMB
-    implicit none
-    integer j
     type(EvolutionVars) EV
-    real(dl), target :: y(EV%nvar),yprime(EV%nvar)
-    real(dl), dimension(:),pointer :: ypol,ypolprime
-
-    real(dl) dgq,grhob_t,grhor_t,grhoc_t,grhog_t,grhov_t,sigma,polter
-    real(dl) qgdot,pigdot,pirdot,vbdot,dgrho
-    real(dl) a,a2,dz,z,clxc,clxb,vb,clxg,qg,pig,clxr,qr,pir
-
-    real(dl) tau,x,divfac
-    real(dl) dgpi_diff, pidot_sum
-    real(dl), target :: pol(3),polprime(3)
-    !dgpi_diff = sum (3*p_nu -rho_nu)*pi_nu
-
-    real(dl) k,k2  ,adotoa, grho, gpres,etak,phi,dgpi
-    real(dl) clxq, vq, diff_rhopi, octg, octgprime
-    real(dl) sources(CTransScal%NumSources)
-    real(dl) ISW
-    
-    !> MGCAMB MOD START: adding variables
-    type(MGCAMB_timestep_cache) :: mgcamb_cache
-    real(dl) adotdota, term1, term2, term3, term4, term5, term6, adotdotdota, Hdotdot, omm, ommdot, ommdotdot
-    real(dl) cs2, opacity, dopacity
-    real(dl) MG_gamma, MG_gammadot, MG_mu, MG_mudot, etadot
-    real(dl) fmu,f1,f2
-    real(dl) MG_rhoDelta, MG_alpha, MG_N, MG_D, MG_hdot, Hdot, dgqMG, dgrhoMG
-    real(dl) LKA1, LKA2
-    real(dl) MG_phi, MG_psi, MG_phidot, MG_psidot
-    integer tempmodel
-    real(dl) ISW_MG
-    real(dl) MGQ,MGR,MGQdot, MGRdot, fQ, k2alpha
-    real(dl) polterdot, MG_alphadot
-    real(dl) :: MG_rhoDeltadot, term0, dgpidot
-    reaL(dl) :: dgpi_w_sum
-    ! compatibility with massive neutrinos
-    real(dl) :: MG_grhonu, MG_gpresnu
-    !< MGCAMB MOD END.
+    real(dl), target :: y(EV%nvar), yprime(EV%nvar)
+    real(dl) tau
+    real(dl), target :: sources(CTransScal%NumSources)
+    integer, intent(in) :: num_custom_sources
 
     yprime = 0
+    EV%OutputSources => Sources
+    if (num_custom_sources>0) &
+        EV%CustomSources => sources(CTransScal%NumSources - num_custom_sources+1:)
     call derivs(EV,EV%ScalEqsToPropagate,tau,y,yprime)
-
-    if (EV%TightCoupling .or. EV%no_phot_multpoles) then
-        pol=0
-        polprime=0
-        ypolprime => polprime
-        ypol => pol
-    else
-        ypolprime => yprime(EV%polind+1:)
-        ypol => y(EV%polind+1:)
-    end if
-
-    k=EV%k_buf
-    k2=EV%k2_buf
-
-    a   =y(1)
-    a2  =a*a
-    etak=y(2)
-    clxc=y(3)
-    clxb=y(4)
-    vb  =y(5)
-    vbdot =yprime(5)
-
-    !  Compute expansion rate from: grho 8*pi*rho*a**2
-    grhob_t=grhob/a
-    grhoc_t=grhoc/a
-    grhor_t=grhornomass/a2
-    grhog_t=grhog/a2
-    !> MGCAMB MOD START: modifying the DE contribution
-    if ( model == 0 ) then
-        grhov_t=grhov*a**(-1-3*w_lam)
-    else
-        call MGCAMB_DarkEnergy( a, mgcamb_par_cache, mgcamb_cache )
-        grhov_t = mgcamb_cache%grhov_t
-    end if
-    grho=grhob_t+grhoc_t+grhor_t+grhog_t+grhov_t
-    if ( model == 0 ) then
-        gpres=(grhog_t+grhor_t)/3+grhov_t*w_lam
-    else
-        gpres=(grhog_t+grhor_t)/3+mgcamb_cache%gpresv_t
-    end if
-    !< MGCAMB MOD END
-
-    !> MGCAMB MOD START: decide whether it's MG or GR
-    ! In symmetron GRtrans is replaced by a_star, so distinguish the cases.
-    if ( model == 7 ) then
-        if ( a < a_star ) then
-            tempmodel = 0
-        else
-            tempmodel = model
-        end if
-    else
-        if ( a.lt. GRtrans ) then
-            tempmodel = 0
-        else
-            tempmodel = model
-        end if
-    end if
-    !< MGCAMB MOD END.
-
-    !> MGCAMB MOD START: filling the timestep cache
-    if ( tempmodel /= 0 ) then
-        ! background quantities
-        mgcamb_cache%grhob_t    = grhob_t
-        mgcamb_cache%grhoc_t    = grhoc_t
-        mgcamb_cache%grhor_t    = grhor_t
-        mgcamb_cache%grhog_t    = grhog_t
-        !mgcamb_cache%grhov_t    = grhov_t
-        !mgcamb_cache%gpresv_t   = grhov_t*w_lam
-        ! perturbation quantities
-        mgcamb_cache%k          = k
-        mgcamb_cache%k2         = k2
-        mgcamb_cache%etak       = etak
-    end if
-    !< MGCAMB MOD END
-
-    !  8*pi*a*a*SUM[rho_i*clx_i] add radiation later
-    dgrho=grhob_t*clxb+grhoc_t*clxc
-
-    !  8*pi*a*a*SUM[(rho_i+p_i)*v_i]
-    dgq=grhob_t*vb
-
-    dgpi=0
-    dgpi_diff = 0
-    pidot_sum = 0
-
-    !> MGCAMB MOD START: compatibility with massive neutrinos
-    if ( tempmodel == 0 ) then
-        if (CP%Num_Nu_Massive /= 0) then
-            call MassiveNuVarsOut(EV,y,yprime,a,grho,gpres,dgrho,dgq,dgpi, dgpi_diff,pidot_sum)
-        end if
-    else if ( tempmodel /= 0 ) then
-        dgpi_w_sum = 0
-        if (CP%Num_Nu_Massive /= 0) then
-            call MassiveNuVarsOut(EV,y,yprime,a,grho,gpres,dgrho,dgq,dgpi, dgpi_diff,pidot_sum, dgpi_w_sum=dgpi_w_sum)
-        end if
-        mgcamb_cache%dgpi_diff  = dgpi_diff
-        mgcamb_cache%grho       = grho
-        mgcamb_cache%gpres      = gpres
-    end if
-    !< MGCAMB MOD END
-
-    if ( w_lam /= -1 .and. w_Perturb .and. model == 0 ) then
-        clxq=y(EV%w_ix)
-        vq=y(EV%w_ix+1)
-        dgrho=dgrho + clxq*grhov_t
-        dgq = dgq + vq*grhov_t*(1+w_lam)
-    end if
-
-    adotoa=sqrt((grho+grhok)/3)
-
-    !> MGCAMB MOD START: computing a'' and H' deciding whether or not to switch to MG
-    adotdota=(adotoa*adotoa-gpres)/2.d0
-    Hdot =adotdota-adotoa**2.d0
-
-    if ( tempmodel /= 0 ) then
-        ! filling expansion history cache
-        mgcamb_cache%adotoa     = adotoa
-        mgcamb_cache%Hdot       = adotoa**2 - 0.5d0*(grho+gpres)
-    end if
-
-
-    !> MGCAMB MOD START: the RSA approximation is not implemented yet
-    if (EV%no_nu_multpoles) then
-        if (tempmodel == 0) then
-            z=(0.5_dl*dgrho/k + etak)/adotoa
-            dz= -adotoa*z - 0.5_dl*dgrho/k
-            clxr=-4*dz/k
-            qr=-4._dl/3*z
-        else ! tempmodel /= 0 , using the old expression
-            clxr = 2*(grhoc_t*clxc+grhob_t*clxb)/3/k**2
-            qr= clxr*k/sqrt((grhoc_t+grhob_t)/3)*(2/3._dl)
-        end if ! tempmodel /= 0
-        pir=0
-        pirdot=0
-    else
-        clxr=y(EV%r_ix)
-        qr  =y(EV%r_ix+1)
-        pir =y(EV%r_ix+2)
-        pirdot=yprime(EV%r_ix+2)
-    end if
-
-    if (EV%no_phot_multpoles) then
-        if (tempmodel == 0) then
-            z=(0.5_dl*dgrho/k + etak)/adotoa
-            dz= -adotoa*z - 0.5_dl*dgrho/k
-            clxg=-4*dz/k -4/k*opac(j)*(vb+z)
-            qg=-4._dl/3*z
-            pig=0
-            pigdot=0
-            octg=0
-            octgprime=0
-            qgdot = -4*dz/3
-        else ! tempmodel /= 0 , using the old expression
-            clxg=2*(grhoc_t*clxc+grhob_t*clxb)/3/k**2
-            qg= clxg*k/sqrt((grhoc_t+grhob_t)/3)*(2/3._dl)
-            qgdot =yprime(EV%g_ix+1)
-            pig=0
-            pigdot=0
-            octg=0
-            octgprime=0
-        end if ! tempmodel /= 0
-    else
-        if (EV%TightCoupling) then
-            pig = EV%pig
-            pigdot=EV%pigdot
-            if (second_order_tightcoupling) then
-                octg = (3._dl/7._dl)*pig*(EV%k_buf/opac(j))
-                ypol(2) = EV%pig/4 + EV%pigdot*(1._dl/opac(j))*(-5._dl/8._dl)
-                ypol(3) = (3._dl/7._dl)*(EV%k_buf/opac(j))*ypol(2)
-            else
-                ypol(2) = EV%pig/4
-                octg=0
-            end if
-            octgprime=0
-        else
-            pig =y(EV%g_ix+2)
-            pigdot=yprime(EV%g_ix+2)
-            octg=y(EV%g_ix+3)
-            octgprime=yprime(EV%g_ix+3)
-        end if
-        clxg=y(EV%g_ix)
-        qg  =y(EV%g_ix+1)
-        qgdot =yprime(EV%g_ix+1)
-    end if
-    !< MGCAMB MOD END
-
-    dgrho       = dgrho + grhog_t*clxg+grhor_t*clxr
-    dgq         = dgq   + grhog_t*qg+grhor_t*qr
-    dgpi        = dgpi  + grhor_t*pir + grhog_t*pig
-    pidot_sum   = pidot_sum + grhor_t*pirdot + grhog_t*pigdot
-
-
-    !  Get sigma (shear) and z from the constraints
-    !  have to get z from eta for numerical stability
-    !> MGCAMB MOD START: if MG then use Modified Einstein equations
-    if (tempmodel /= 0) then
-        dgpi_w_sum = dgpi_w_sum + 3.d0*(grhor_t*pir+grhog_t*pig)
-        ! compatibility with massive neutrinos
-        if (CP%Num_Nu_Massive /= 0) then
-            call MassiveNuVarsOut(EV,y,yprime,a,grho=MG_grhonu, gpres=MG_gpresnu)
-        end if
-
-        ! fill the background neutrinos cache
-        mgcamb_cache%grhonu_t  = MG_grhonu
-        mgcamb_cache%gpresnu_t = MG_gpresnu
-
-        ! fill perturbation cache
-        mgcamb_cache%dgrho      = dgrho
-        mgcamb_cache%dgq        = dgq
-        mgcamb_cache%pidot_sum  = pidot_sum
-        mgcamb_cache%dgpi_w_sum = dgpi_w_sum
-        mgcamb_cache%dgpi       = dgpi
-        mgcamb_cache%dgpi_diff  = dgpi_diff
-        mgcamb_cache%rhoDelta   = dgrho + 3._dl * adotoa * dgq/ k
-
-        ! calculate the MG functions
-        call MGCAMB_compute_MG_functions( a, mgcamb_par_cache, mgcamb_cache )
-
-        !write(*,*) mgcamb_cache%mu, mgcamb_cache%mudot, mgcamb_cache%gamma, mgcamb_cache%gammadot
-
-        ! calculate sigma
-        call MGCAMB_compute_sigma( a, mgcamb_par_cache, mgcamb_cache )
-        sigma = mgcamb_cache%sigma
-
-        ! calculate z
-        call MGCAMB_compute_z( a, mgcamb_par_cache, mgcamb_cache )
-        z = mgcamb_cache%z
-        !sigmadot = mgcamb_cache%sigmadot
-
-     else !GR limit ( model = 0 )
-         z=(0.5_dl*dgrho/k + etak)/adotoa
-         sigma=z+1.5_dl*dgq/k2
-     end if
-    !< MGCAMB MOD END.
-
-    polter = 0.1_dl*pig+9._dl/15._dl*ypol(2)
-
-    !> MGCAMB MOD START: working only with flat models
-    if (CP%flat) then
-        x=k*(CP%tau0-tau)
-        divfac=x*x
-    else if (model ==0) then
-        x=(CP%tau0-tau)/CP%r
-        divfac=(CP%r*rofChi(x))**2*k2
-    else
-        Stop "MGCAMB is working for flat universe at the moment. Please check www.sfu.ca/~aha25/MGCAMB.html for updates."
-    end if
-    !< MGCAMB MOD END.
-
-    if (EV%TightCoupling) then
-        if (second_order_tightcoupling) then
-            pigdot = EV%pigdot
-            ypolprime(2)= (pigdot/4._dl)*(1+(5._dl/2._dl)*(dopac(j)/opac(j)**2))
-        else
-            pigdot = -dopac(j)/opac(j)*pig + 32._dl/45*k/opac(j)*(-2*adotoa*sigma  &
-            +etak/EV%Kf(1)-  dgpi/k +vbdot )
-            ypolprime(2)= pigdot/4
-        end if
-    end if
-
-    !> MGCAMB MOD START: the following has already been calculated
-    !pidot_sum =  pidot_sum + grhog_t*pigdot + grhor_t*pirdot
-    diff_rhopi = pidot_sum - ( 4*dgpi+ dgpi_diff )*adotoa
-    !> MGCAMB MOD END
-
-
-    !> MGCAMB MOD START: modifying the ISW effect
-    if ( tempmodel == 0 ) then! GR ISW effect
-        !Maple's fortran output - see scal_eqs.map
-        !2phi' term (\phi' + \psi' in Newtonian gauge)
-        ISW = (4.D0/3.D0*k*EV%Kf(1)*sigma+(-2.D0/3.D0*sigma-2.D0/3.D0*etak/adotoa)*k &
-        -diff_rhopi/k**2-1.D0/adotoa*dgrho/3.D0+(3.D0*gpres+5.D0*grho)*sigma/k/3.D0 &
-        -2.D0/k*adotoa/EV%Kf(1)*etak)*expmmu(j)
-
-        !e.g. to get only late-time ISW
-        !  if (1/a-1 < 30) ISW=0
-
-        !The rest, note y(9)->octg, yprime(9)->octgprime (octopoles)
-        sources(1)= ISW +  ((-9.D0/160.D0*pig-27.D0/80.D0*ypol(2))/k**2*opac(j)+ &
-        (11.D0/10.D0*sigma- 3.D0/8.D0*EV%Kf(2)*ypol(3)+vb-9.D0/80.D0*EV%Kf(2)*octg+3.D0/40.D0*qg)/k- &
-        (-180.D0*ypolprime(2)-30.D0*pigdot)/k**2/160.D0)*dvis(j) + &
-        (-(9.D0*pigdot+ 54.D0*ypolprime(2))/k**2*opac(j)/160.D0+pig/16.D0+clxg/4.D0+3.D0/8.D0*ypol(2) + &
-        (-21.D0/5.D0*adotoa*sigma-3.D0/8.D0*EV%Kf(2)*ypolprime(3) + &
-        vbdot+3.D0/40.D0*qgdot- 9.D0/80.D0*EV%Kf(2)*octgprime)/k + &
-        (-9.D0/160.D0*dopac(j)*pig-21.D0/10.D0*dgpi-27.D0/80.D0*dopac(j)*ypol(2))/k**2)*vis(j) + &
-        (3.D0/16.D0*ddvis(j)*pig+9.D0/8.D0*ddvis(j)*ypol(2))/k**2+21.D0/10.D0/k/EV%Kf(1)*vis(j)*etak
-
-
-    else ! MG ISW effect
-        ! ISW for mu,gamma parametrization
-
-        call MGCAMB_compute_ISW( a, mgcamb_par_cache, mgcamb_cache )
-
-        ISW = expmmu(j) * mgcamb_cache%MG_ISW
-
-        polterdot=9._dl/15._dl*ypolprime(2) + 0.1_dl*pigdot
-
-        ! old version
-        !sources(1) = ISW+&
-        !vis(j)* (clxg/4.D0 +polter/1.6d0 + vbdot/k -9.D0*(polterdot)/k2*&
-        !    opac(j)/16.D0-9.D0/16.D0*dopac(j)* polter/k2&
-        !    + 2.1d0*MG_alphadot + 3.D0/40.D0 *qgdot/k &!+21.D0/10.D0*dgpi/k2&
-        !    +(-3.D0/8.D0*EV%Kf(2)*ypolprime(3) - 9.D0/80.D0*EV%Kf(2)*octgprime)/k)&
-        !+ (MG_alpha+vb/k+30.0d0/8.0d0 *polterdot/k2)*dvis(j)+ ddvis(j)*30.0d0/16.0d0*polter/k2
-
-        ! new version
-        sources(1) = ISW&
-        & +vis(j)* (clxg/4.D0 + polter/1.6d0 + vbdot/k -9.D0*(polterdot)/k2*opac(j)/16.D0 -9.D0/16.D0*dopac(j)*polter/k2&
-        & + 21.D0/10.D0*mgcamb_cache%MG_alphadot + 3.D0/40.D0*qgdot/k &
-        & +(-3.D0/8.D0*EV%Kf(2)*ypolprime(3) - 9.D0/80.D0*EV%Kf(2)*octgprime)/k)&
-        & +((-9.D0/160.D0*pig-27.D0/80.D0*ypol(2))/k**2*opac(j)+(11.D0/10.D0*sigma- &
-        & 3.D0/8.D0*EV%Kf(2)*ypol(3)+vb-9.D0/80.D0*EV%Kf(2)*octg+3.D0/40.D0*qg)/k-(- &
-        & 180.D0*ypolprime(2)-30.D0*pigdot)/k**2/160.D0)*dvis(j)&
-        & +(3.D0/16.D0*ddvis(j)*pig+9.D0/8.D0*ddvis(j)*ypol(2))/k**2
-
-
-    end if
-    !< MGCAMB MOD END
-
-    ! Doppler term
-    !   sources(1)=  (sigma+vb)/k*dvis(j)+((-2.D0*adotoa*sigma+vbdot)/k-1.D0/k**2*dgpi)*vis(j) &
-    !         +1.D0/k/EV%Kf(1)*vis(j)*etak
-
-    !Equivalent full result
-    !    t4 = 1.D0/adotoa
-    !    t92 = k**2
-    !   sources(1) = (4.D0/3.D0*EV%Kf(1)*expmmu(j)*sigma+2.D0/3.D0*(-sigma-t4*etak)*expmmu(j))*k+ &
-    !       (3.D0/8.D0*ypol(2)+pig/16.D0+clxg/4.D0)*vis(j)
-    !    sources(1) = sources(1)-t4*expmmu(j)*dgrho/3.D0+((11.D0/10.D0*sigma- &
-    !         3.D0/8.D0*EV%Kf(2)*ypol(3)+vb+ 3.D0/40.D0*qg-9.D0/80.D0*EV%Kf(2)*y(9))*dvis(j)+(5.D0/3.D0*grho+ &
-    !        gpres)*sigma*expmmu(j)+(-2.D0*adotoa*etak*expmmu(j)+21.D0/10.D0*etak*vis(j))/ &
-    !        EV%Kf(1)+(vbdot-3.D0/8.D0*EV%Kf(2)*ypolprime(3)+3.D0/40.D0*qgdot-21.D0/ &
-    !        5.D0*sigma*adotoa-9.D0/80.D0*EV%Kf(2)*yprime(9))*vis(j))/k+(((-9.D0/160.D0*pigdot- &
-    !        27.D0/80.D0*ypolprime(2))*opac(j)-21.D0/10.D0*dgpi -27.D0/80.D0*dopac(j)*ypol(2) &
-    !        -9.D0/160.D0*dopac(j)*pig)*vis(j) - diff_rhopi*expmmu(j)+((-27.D0/80.D0*ypol(2)-9.D0/ &
-    !        160.D0*pig)*opac(j)+3.D0/16.D0*pigdot+9.D0/8.D0*ypolprime(2))*dvis(j)+9.D0/ &
-    !        8.D0*ddvis(j)*ypol(2)+3.D0/16.D0*ddvis(j)*pig)/t92
-
-
-    if (x > 0._dl) then
-        !E polarization source
-        sources(2)=vis(j)*polter*(15._dl/8._dl)/divfac
-        !factor of four because no 1/16 later
-    else
-        sources(2)=0
-    end if
-
-    if (CTransScal%NumSources > 2) then
-        !Get lensing sources
-        !Can modify this here if you want to get power spectra for other tracer
-        if (tau>tau_maxvis .and. CP%tau0-tau > 0.1_dl) then
-
-            !> MGCAMB MOD START: modifying the lensing potential
-            if(tempmodel == 0 ) then
-                !phi_lens = Phi - 1/2 kappa (a/k)^2 sum_i rho_i pi_i
-                phi = -(dgrho +3*dgq*adotoa/k)/(k2*EV%Kf(1)*2) - dgpi/k2/2
-                sources(3) = -2*phi*f_K(tau-tau_maxvis)/(f_K(CP%tau0-tau_maxvis)*f_K(CP%tau0-tau))
-
-            else
-                call MGCAMB_compute_lensing( a, mgcamb_par_cache, mgcamb_cache )
-                sources(3) = - mgcamb_cache%MG_lensing*f_K(tau-tau_maxvis)/(f_K(CP%tau0-tau_maxvis)*f_K(CP%tau0-tau))
-                !phi = -(dgrho +3*dgq*adotoa/k)/(k2*EV%Kf(1)*2) - dgpi/k2/2
-                !if (model==1 .or. model==4 .or. model==5.or. model==6 .or. model == 7 .or. model ==8 .or. model==9 .or. model ==10)&
-                !    sources(3) =-mgcamb_cache%mu*(1.d0+mgcamb_cache%gamma)*phi*f_K(tau-tau_maxvis)&
-                !                & /(f_K(CP%tau0-tau_maxvis)*f_K(CP%tau0-tau))
-                !if(model==2 .or. model==3)&
-                !    sources(3) = -mgcamb_cache%Q*(1.d0+mgcamb_cache%R)*phi*f_K(tau-tau_maxvis)/&
-                !                & (f_K(CP%tau0-tau_maxvis)*f_K(CP%tau0-tau))
-                !end if
-
-
-
-            end if
-           !< MGCAMB MOD END
-            
-    !We include the lensing factor of two here
-        else
-            sources(3) = 0
-        end if
-    end if
+    nullify(EV%OutputSources, EV%CustomSources)
 
     end subroutine output
 
 
+
     !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-    subroutine outputt(EV,yt,n,j,tau,dt,dte,dtb)
+    subroutine outputt(EV,yt,n,tau,dt,dte,dtb)
     !calculate the tensor sources for open and closed case
     use ThermoData
 
     implicit none
-    integer j,n
+    integer n
     type(EvolutionVars) :: EV
     real(dl), target :: yt(n), ytprime(n)
     real(dl) tau,dt,dte,dtb,x,polterdot,polterddot,prefac
@@ -1700,6 +1301,8 @@
     real(dl), dimension(:),pointer :: E,Bprime,Eprime
     real(dl), target :: pol(3),polEprime(3), polBprime(3)
     real(dl) dtauda
+    real(dl) opacity, dopacity, ddopacity, &
+        visibility, dvisibility, ddvisibility, exptau, lenswindow
 
     call derivst(EV,EV%nvart,tau,yt,ytprime)
 
@@ -1709,6 +1312,8 @@
     shear = yt(3)
 
     x=(CP%tau0-tau)/CP%r
+    call IonizationFunctionsAtTime(tau, opacity, dopacity, ddopacity, &
+        visibility, dvisibility, ddvisibility, exptau, lenswindow)
 
     !  And the electric part of the Weyl.
     if (.not. EV%TensTightCoupling) then
@@ -1723,8 +1328,8 @@
         !  Use the tight-coupling approximation
         a =yt(1)
         adotoa = 1/(a*dtauda(a))
-        pigdot=32._dl/45._dl*k/opac(j)*(2._dl*adotoa*shear+ytprime(3))
-        pig = 32._dl/45._dl*k/opac(j)*shear
+        pigdot=32._dl/45._dl*k/opacity*(2._dl*adotoa*shear+ytprime(3))
+        pig = 32._dl/45._dl*k/opacity*shear
         pol=0
         polEprime=0
         polBprime=0
@@ -1744,19 +1349,19 @@
 
         polter = 0.1_dl*pig + 9._dl/15._dl*E(2)
         polterdot=9._dl/15._dl*Eprime(2) + 0.1_dl*pigdot
-        polterddot = 9._dl/15._dl*(-dopac(j)*(E(2)-polter)-opac(j)*(  &
-        Eprime(2)-polterdot) + k*(2._dl/3._dl*Bprime(2)*aux - 5._dl/27._dl*Eprime(3)*EV%Kft(2))) &
-        +0.1_dl*(k*(-octg*EV%Kft(2)/3._dl + 8._dl/15._dl*ytprime(3)) - &
-        dopac(j)*(pig - polter) - opac(j)*(pigdot-polterdot))
+        polterddot = 9._dl/15._dl*(-dopacity*(E(2)-polter)-opacity*(  &
+            Eprime(2)-polterdot) + k*(2._dl/3._dl*Bprime(2)*aux - 5._dl/27._dl*Eprime(3)*EV%Kft(2))) &
+            +0.1_dl*(k*(-octg*EV%Kft(2)/3._dl + 8._dl/15._dl*ytprime(3)) - &
+            dopacity*(pig - polter) - opacity*(pigdot-polterdot))
 
-        dt=(shear*expmmu(j) + (15._dl/8._dl)*polter*vis(j)/k)*CP%r/sinhxr**2/prefac
+        dt=(shear*exptau + (15._dl/8._dl)*polter*visibility/k)*CP%r/sinhxr**2/prefac
 
         dte=CP%r*15._dl/8._dl/k/prefac* &
-        ((ddvis(j)*polter + 2._dl*dvis(j)*polterdot + vis(j)*polterddot)  &
-        + 4._dl*cothxor*(dvis(j)*polter + vis(j)*polterdot) - &
-        vis(j)*polter*(k2 -6*cothxor**2))
+            ((ddvisibility*polter + 2._dl*dvisibility*polterdot + visibility*polterddot)  &
+            + 4._dl*cothxor*(dvisibility*polter + visibility*polterdot) - &
+            visibility*polter*(k2 -6*cothxor**2))
 
-        dtb=15._dl/4._dl*EV%q*CP%r/k/prefac*(vis(j)*(2._dl*cothxor*polter + polterdot) + dvis(j)*polter)
+        dtb=15._dl/4._dl*EV%q*CP%r/k/prefac*(visibility*(2._dl*cothxor*polter + polterdot) + dvisibility*polter)
     else
         dt=0._dl
         dte=0._dl
@@ -1766,18 +1371,21 @@
     end subroutine outputt
 
     !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-    subroutine outputv(EV,yv,n,j,tau,dt,dte,dtb)
+    subroutine outputv(EV,yv,n,tau,dt,dte,dtb)
     !calculate the vector sources
     use ThermoData
 
     implicit none
-    integer j,n
+    integer n
     type(EvolutionVars) :: EV
     real(dl), target :: yv(n), yvprime(n)
     real(dl) tau,dt,dte,dtb,x,polterdot
     real(dl) vb,qg, pig, polter, sigma
     real(dl) k,k2
     real(dl), dimension(:),pointer :: E,Eprime
+    real(dl) opacity, dopacity, ddopacity, &
+        visibility, dvisibility, ddvisibility, exptau, lenswindow
+
 
     call derivsv(EV,EV%nvarv,tau,yv,yvprime)
 
@@ -1798,17 +1406,20 @@
         polter = 0.1_dl*pig + 9._dl/15._dl*E(2)
         polterdot=9._dl/15._dl*Eprime(2) + 0.1_dl*yvprime(5)
 
+        call IonizationFunctionsAtTime(tau, opacity, dopacity, ddopacity, &
+            visibility, dvisibility, ddvisibility, exptau, lenswindow)
+
         if (yv(1) < 1e-3) then
             dt = 1
         else
             dt =0
         end if
-        dt= (4*(vb+sigma)*vis(j) + 15._dl/2/k*( vis(j)*polterdot + dvis(j)*polter) &
-        + 4*(expmmu(j)*yvprime(2)) )/x
+        dt= (4*(vb+sigma)*visibility + 15._dl/2/k*( visibility*polterdot + dvisibility*polter) &
+            + 4*(exptau*yvprime(2)) )/x
 
-        dte= 15._dl/2*2*polter/x**2*vis(j) + 15._dl/2/k*(dvis(j)*polter + vis(j)*polterdot)/x
+        dte= 15._dl/2*2*polter/x**2*visibility + 15._dl/2/k*(dvisibility*polter + visibility*polterdot)/x
 
-        dtb= -15._dl/2*polter/x*vis(j)
+        dtb= -15._dl/2*polter/x*visibility
     else
         dt=0
         dte=0
@@ -1821,26 +1432,24 @@
     !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
     subroutine initial(EV,y, tau)
     !  Initial conditions.
-    !> MGCAMB MOD START
-    use MGCAMB
-    !< MGCAMB MOD END
-
     use ThermoData
     implicit none
 
     type(EvolutionVars) EV
     real(dl) y(EV%nvar)
     real(dl) Rp15,tau,x,x2,x3,om,omtau, &
-    Rc,Rb,Rv,Rg,grhonu,chi
+        Rc,Rb,Rv,Rg,grhonu,chi
     real(dl) k,k2
     real(dl) a,a2, iqg, rhomass,a_massive, ep
     integer l,i, nu_i, j, ind
     integer, parameter :: i_clxg=1,i_clxr=2,i_clxc=3, i_clxb=4, &
-    i_qg=5,i_qr=6,i_vb=7,i_pir=8, i_eta=9, i_aj3r=10,i_clxq=11,i_vq=12
-    integer, parameter :: i_max = i_vq
+        i_qg=5,i_qr=6,i_vb=7,i_pir=8, i_eta=9, i_aj3r=10,i_clxde=11,i_vde=12
+    integer, parameter :: i_max = i_vde
     real(dl) initv(6,1:i_max), initvec(1:i_max)
 
     nullify(EV%OutputTransfer) !Should not be needed, but avoids issues in ifort 14
+    nullify(EV%OutputSources)
+    nullify(EV%CustomSources)
 
     if (CP%flat) then
         EV%k_buf=EV%q
@@ -1902,7 +1511,7 @@
     Rp15=4*Rv+15
 
     if (CP%Scalar_initial_condition > initial_nummodes) &
-    stop 'Invalid initial condition for scalar modes'
+        call MpiStop('Invalid initial condition for scalar modes')
 
     a=tau*adotrad*(1+omtau/4)
     a2=a*a
@@ -1937,7 +1546,7 @@
         initv(2,i_eta)= Rc*omtau*(1._dl/3 - omtau/8)*EV%Kf(1)
         initv(2,i_aj3r)=0
         !Baryon isocurvature
-        if (Rc==0) stop 'Isocurvature initial conditions assume non-zero dark matter'
+        if (Rc==0) call MpiStop('Isocurvature initial conditions assume non-zero dark matter')
 
         initv(3,:) = initv(2,:)*(Rb/Rc)
         initv(3,i_clxc) = initv(3,i_clxb)
@@ -1999,12 +1608,10 @@
     y(EV%g_ix)=InitVec(i_clxg)
     y(EV%g_ix+1)=InitVec(i_qg)
 
-    !> MGCAMB MOD START
-    if ( w_lam /= -1 .and. w_Perturb .and. model == 0 ) then
-        y(EV%w_ix) = InitVec(i_clxq)
-        y(EV%w_ix+1) = InitVec(i_vq)
+    if (w_lam /= -1 .and. w_Perturb) then
+        y(EV%w_ix) = InitVec(i_clxde)
+        y(EV%w_ix+1) = InitVec(i_vde)
     end if
-    !< MGCAMB MOD END
 
     !  Neutrinos
     y(EV%r_ix)=InitVec(i_clxr)
@@ -2112,8 +1719,8 @@
         pir=-2._dl/3._dl/(bigR+5)*x**2*elec
         !           + (bigR-1)/bigR*Magnetic*(1-15./14*x**2/(15+4*bigR))
         aj3r=  -2._dl/21._dl/(bigR+5)*x**3*elec !&
-        !           + 3._dl/7*x*(bigR-1)/bigR*Magnetic
-        yt(EV%r_ix+2)=pir
+            !           + 3._dl/7*x*(bigR-1)/bigR*Magnetic
+            yt(EV%r_ix+2)=pir
         yt(EV%r_ix+3)=aj3r
         !Should set up massive too, but small anyway..
     end if
@@ -2134,7 +1741,7 @@
         EV%k2_buf=EV%q2
         EV%k_buf=EV%q
     else
-        stop 'Vectors not supported in non-flat models'
+        call MpiStop('Vectors not supported in non-flat models')
     endif
 
     k=EV%k_buf
@@ -2155,8 +1762,8 @@
     yv(2)= vec_sig0*(1- 15._dl/2*omtau/(4*bigR+15)) + 45._dl/14*x*Magnetic*(BigR-1)/(4*BigR+15)
     !qg
     yv(4)= vec_sig0/3* (4*bigR + 5)/(1-BigR)*(1  -0.75_dl*omtau*(Rc-1)/(bigR-1)* &
-    (1 - 0.25_dl*omtau*(3*Rc-2-bigR)/(BigR-1))) &
-    -x/2*Magnetic
+        (1 - 0.25_dl*omtau*(3*Rc-2-bigR)/(BigR-1))) &
+        -x/2*Magnetic
     yv(3)= 3._dl/4*yv(4)
 
     yv(5:EV%nvarv) = 0
@@ -2174,7 +1781,7 @@
     !  Neutrinos
     !q_r
     yv((EV%lmaxv-1+1)+(EV%lmaxpolv-1)*2+3+1) = -1._dl/3*vec_sig0*(4*BigR+5)/bigR &
-    + x**2*vec_sig0/6/BigR +0.5_dl*x*(1/bigR-1)*Magnetic
+        + x**2*vec_sig0/6/BigR +0.5_dl*x*(1/bigR-1)*Magnetic
     !pi_r
     pir=-2._dl/3._dl*x*vec_sig0/BigR - (1/bigR-1)*Magnetic
     yv((EV%lmaxv-1+1)+(EV%lmaxpolv-1)*2+3+1 +1)=pir
@@ -2188,11 +1795,9 @@
     implicit none
     type(EvolutionVars) EV
     real(dl), intent(in) :: tau
-    real(dl) clxc, clxb, clxg, clxr, k,k2
-    real(dl) grho,gpres,dgrho,dgq,a
     real, target :: Arr(:)
     real(dl) y(EV%nvar),yprime(EV%nvar)
-   
+
     yprime = 0
     EV%OutputTransfer =>  Arr
     call derivs(EV,EV%ScalEqsToPropagate,tau,y,yprime)
@@ -2208,7 +1813,8 @@
     !  ayprime is not necessarily GaugeInterface.yprime, so keep them distinct
     use ThermoData
     use MassiveNu
-    !> MGCMAB MOD START: adding mg module
+
+    !> MGCAMB MOD START
     use MGCAMB
     !< MGCAMB MOD END
 
@@ -2224,36 +1830,34 @@
 
     real(dl) opacity
     real(dl) photbar,cs2,pb43,grho,slip,clxgdot, &
-    clxcdot,clxbdot,adotdota,gpres,clxrdot,etak
+        clxcdot,clxbdot,adotdota,gpres,clxrdot,etak
     real(dl) q,aq,v
     real(dl) G11_t,G30_t, wnu_arr(max_nu)
 
-    real(dl) dgq,grhob_t,grhor_t,grhoc_t,grhog_t,grhov_t,sigma,polter
+    real(dl) dgq,grhob_t,grhor_t,grhoc_t,grhog_t,grhov_t,grhonu_t,sigma,polter
     real(dl) qgdot,qrdot,pigdot,pirdot,vbdot,dgrho,adotoa
     real(dl) a,a2,z,clxc,clxb,vb,clxg,qg,pig,clxr,qr,pir
-    real(dl) clxq, vq,  E2, dopacity
+    real(dl) clxde, qde,  E2, dopacity
     integer l,i,ind, ind2, off_ix, ix
     real(dl) dgs,sigmadot,dz !, ddz
-    real(dl) dgpi,dgrho_matter,grho_matter, clxnu_all
+    real(dl) dgpi,dgrho_matter,grho_matter, clxnu, gpres_nu
     !non-flat vars
     real(dl) cothxor !1/tau in flat case
+    !Variables for source calculation
+    real(dl) diff_rhopi, pidot_sum, dgpi_diff, phi
+    real(dl) E(2:3), Edot(2:3)
+    real(dl) phidot, polterdot, polterddot, octg, octgdot
+    real(dl) ddopacity, visibility, dvisibility, ddvisibility, exptau, lenswindow
+    real(dl) ISW, quadrupole_source, doppler, monopole_source, tau0
 
-    !> MGCAMB MOD START: adding the new MG variables
+    !> MGCAMB MOD START: adding MGCAMB parameters
     type(MGCAMB_timestep_cache) :: mgcamb_cache
-    real(dl) :: term1, term2, term3,term4, term5, term6
-    real(dl ):: adotdotdota, Hdotdot, omm, ommdot, ommdotdot
-    real(dl) :: MG_gamma, MG_gammadot, MG_mu, MG_mudot, etadot
-    real(dl) :: fmu,f1,f2
-    real(dl) :: MG_rhoDelta, MG_alpha, MG_N, MG_D, MG_hdot, Hdot, dgqMG, dgrhoMG
-    real(dl) :: LKA1, LKA2
-    integer  :: tempmodel
-    real(dl) :: MGQ,MGR,MGQdot, MGRdot, fQ, k2alpha, MG_phi, MG_psi, MG_phidot
-    ! massive neutrinos compatibility
-    real(dl) :: MG_grhonu, MG_gpresnu, MG_dgqnu
+    integer :: tempmodel
+    real(dl) :: ISW_MG
     real(dl) :: dgpi_w_sum
-    real(dl) :: pidot_sum
-    !< MGCAMB MOD END.
-    
+    real(dl) :: etadot
+    !< MGCAMB MOD END
+
     k=EV%k_buf
     k2=EV%k2_buf
 
@@ -2276,14 +1880,15 @@
     grhor_t=grhornomass/a2
     grhog_t=grhog/a2
 
-    !> MGCAMB MOD START: modifying the DE contribution
-    if ( model == 0 ) then
+    !> MGCAMB MOD START: computing DE density in MGCAMB
+    if ( MG_flag == 0 ) then !< default CAMB
         if (w_lam==-1._dl) then
             grhov_t=grhov*a2
         else
             grhov_t=grhov*a**(-1-3*w_lam)
         end if
     else
+        call MGCAMB_timestep_cache_nullify( mgcamb_cache )
         call MGCAMB_DarkEnergy( a, mgcamb_par_cache, mgcamb_cache )
         grhov_t = mgcamb_cache%grhov_t
     end if
@@ -2296,99 +1901,67 @@
         call thermo(tau,cs2,opacity)
     end if
 
-    gpres=0
-    grho_matter=grhob_t+grhoc_t
+    gpres_nu=0
+    grhonu_t=0
 
     !total perturbations: matter terms first, then add massive nu, de and radiation
     !  8*pi*a*a*SUM[rho_i*clx_i]
     dgrho_matter=grhob_t*clxb+grhoc_t*clxc
     !  8*pi*a*a*SUM[(rho_i+p_i)*v_i]
     dgq=grhob_t*vb
-    
 
     if (CP%Num_Nu_Massive > 0) then
-        call MassiveNuVars(EV,ay,a,grho_matter,gpres,dgrho_matter,dgq, wnu_arr)
+        call MassiveNuVars(EV,ay,a,grhonu_t,gpres_nu,dgrho_matter,dgq, wnu_arr)
     end if
 
+    grho_matter=grhonu_t+grhob_t+grhoc_t
     grho = grho_matter+grhor_t+grhog_t+grhov_t
-    dgrho = dgrho_matter
 
-    !> MGCAMB MOD START: MGCAMB works only with flat models
+    !> MGCAMB MOD START: MGCAMB working only with flat models
     if (CP%flat) then
         adotoa=sqrt(grho/3)
-
-        if ( model == 0 ) then
-            gpres=gpres + (grhog_t+grhor_t)/3.d0 +grhov_t*w_lam
-        else
-            gpres=gpres + (grhog_t+grhor_t)/3.d0 +mgcamb_cache%gpresv_t
-        end if
-        adotdota=(adotoa*adotoa-gpres)/2.d0
-        Hdot =adotdota-adotoa**2.d0
-
         cothxor=1._dl/tau
-    else if ( model == 0 ) then
+    else if ( MG_flag == 0 ) then
         adotoa=sqrt((grho+grhok)/3._dl)
         cothxor=1._dl/tanfunc(tau/CP%r)/CP%r
     else
         Stop " MGCAMB is working for flat universe at the moment. Please check www.sfu.ca/~aha25/MGCAMB.htmlfor updates."
     end if
-    !< MGCAMB MOD END.
-
+    !< MGCAMB MOD END
 
     !> MGCAMB MOD START: switch MG on according to the model (in model 7 GRtrans is replaced by a_star)
-    if ( model == 7 ) then
-        if (a< a_star) then
-            tempmodel = 0
-        else
-          tempmodel = model
-        end if
-    else
-       if ( a.lt. GRtrans ) then
-          tempmodel = 0
-       else
-          tempmodel = model
-       end if
-    end if
-
-    !> MGCAMB MOD START: filling the timestep cache
-    if ( tempmodel /= 0 ) then
-        ! background quantities
-        mgcamb_cache%grhob_t    = grhob_t
-        mgcamb_cache%grhoc_t    = grhoc_t
-        mgcamb_cache%grhor_t    = grhor_t
-        mgcamb_cache%grhog_t    = grhog_t
-        !mgcamb_cache%grhov_t    = grhov_t
-        !mgcamb_cache%gpresv_t   = grhov_t*w_lam
-        ! perturbation quantities
-        mgcamb_cache%k          = k
-        mgcamb_cache%k2         = k2
-        mgcamb_cache%etak       = etak
-        ! filling expansion history cache
-        mgcamb_cache%adotoa     = adotoa
-        mgcamb_cache%Hdot       = adotoa**2 - 0.5d0*(grho+gpres)
+    tempmodel = 0
+    if ( MG_flag /= 0 .and. a .ge. GRtrans ) then
+        tempmodel = MG_flag
     end if
     !< MGCAMB MOD END
 
 
-     if (w_lam /= -1 .and. w_Perturb .and. model == 0 ) then
-     clxq=ay(EV%w_ix)
-        vq=ay(EV%w_ix+1)
-        dgrho=dgrho + clxq*grhov_t
-        dgq = dgq + vq*grhov_t*(1+w_lam)
-    end if
-    !< MGCAMB MOD END.
+    dgrho = dgrho_matter
 
-    !> MGCAMB MOD START: replacing the RSA with the old calculations
+    !> MGCMAB MOD START: perturb DE only in default CAMB
+    if ( w_lam /= -1 .and. w_Perturb .and. MG_flag == 0 ) then
+        clxde=ay(EV%w_ix)
+        qde=ay(EV%w_ix+1)*(1+w_lam)
+        dgrho=dgrho + clxde*grhov_t
+        dgq = dgq + qde*grhov_t
+    end if
+    !< MGCAMB MOD END
+
+
+    !> MGCAMB MOD START: RSA yet to be implemented in MGCAMB, using the older expressions
     if (EV%no_nu_multpoles) then
         !RSA approximation of arXiv:1104.2933, dropping opactity terms in the velocity
         !Approximate total density variables with just matter terms
-        if (tempmodel == 0) then
+        !write(*,*) 'using RSA at a:',a
+        if ( tempmodel == 0 ) then
             z=(0.5_dl*dgrho/k + etak)/adotoa
             dz= -adotoa*z - 0.5_dl*dgrho/k
             clxr=-4*dz/k
             qr=-4._dl/3*z
             pir=0
         else ! tempmodel /=0
+            ! this is the old RSA..
             clxr=2*(grhoc_t*clxc+grhob_t*clxb)/3/k**2
             qr= clxr*k/sqrt((grhoc_t+grhob_t)/3)*(2/3._dl)
             pir=0
@@ -2401,7 +1974,8 @@
     endif
 
     if (EV%no_phot_multpoles) then
-        if (tempmodel == 0 ) then
+        !write(*,*) 'using RSA at a:',a
+        if  ( tempmodel == 0 ) then
             if (.not. EV%no_nu_multpoles) then
                 z=(0.5_dl*dgrho/k + etak)/adotoa
                 dz= -adotoa*z - 0.5_dl*dgrho/k
@@ -2423,7 +1997,6 @@
         qg=ay(EV%g_ix+1)
         if (.not. EV%TightCoupling) pig=ay(EV%g_ix+2)
     end if
-    !< MGCAMB MOD END.
 
     !  8*pi*a*a*SUM[rho_i*clx_i] - radiation terms
     dgrho=dgrho + grhog_t*clxg+grhor_t*clxr
@@ -2437,55 +2010,59 @@
 
     ayprime(1)=adotoa*a
 
-    !> MGCAMB MOD START: anisotropic contribution and other quantities from massive neutrinos
-    dgpi        = 0.d0
-    MG_gpresnu  = 0.d0
-    MG_grhonu   = 0.d0
-    dgpi_w_sum  = 0.d0
+    !> MGCAMB MOD START: computing Z, sigma in MG
+    if ( tempmodel /= 0 ) then
 
-    if (CP%Num_Nu_Massive /= 0) then
-        !> ayprime is not used to compute dgpi so it's safe to use this.
-        ! MassiveNuVarsOut(EV,y,yprime,a,grho,gpres,dgrho,dgq,dgpi, gdpi_diff,pidot_sum,clxnu_all)
-        call MassiveNuVarsOut(EV,ay,ayprime,a, grho=MG_grhonu, gpres=MG_gpresnu, dgpi=dgpi, dgpi_w_sum=dgpi_w_sum)
-    end if
+        ! 1. Filling the cache
 
-    ! adding the massless neutrinos and photons contributions to the anisotropic stress
-    dgpi = dgpi + grhor_t*pir + grhog_t*pig
-    !dgpi_w_sum = dgpi_w_sum + 3.d0*(grhor_t*pir + grhog_t*pig)
-
-    ! Computing Z and sigma with modified Einstein equation
-    if (tempmodel /= 0) then
-
-        dgpi_w_sum = dgpi_w_sum + 3.d0*(grhor_t*pir+grhog_t*pig)
+        gpres = (grhog_t+grhor_t)/3.d0 + mgcamb_cache%gpresv_t + gpres_nu
+        mgcamb_cache%gpres  = gpres
+        mgcamb_cache%grho   = grho
+        dgpi                = 0.d0
+        dgpi_w_sum          = 0.d0
 
         ! compatibility with massive neutrinos
-        !if (CP%Num_Nu_Massive /= 0) then
-        !    call MassiveNuVarsOut(EV,ay,ayprime,a,grho=MG_grhonu, gpres=MG_gpresnu)
-        !end if
+        if (CP%Num_Nu_Massive /= 0) then
+            !> ayprime is not used to compute dgpi so it's safe to use this here
+            ! MassiveNuVarsOut(EV,y,yprime,a,grho,gpres,dgrho,dgq,dgpi, gdpi_diff,pidot_sum,clxnu_all)
+            call MassiveNuVarsOut(EV,ay,ayprime,a, dgpi=dgpi, dgpi_w_sum=dgpi_w_sum)
+        end if
 
-        ! fill the background neutrinos cache
-        mgcamb_cache%grhonu_t  = MG_grhonu
-        mgcamb_cache%gpresnu_t = MG_gpresnu
+        dgpi = dgpi + grhor_t*pir + grhog_t*pig
+        dgpi_w_sum = dgpi_w_sum + 3.d0*(grhor_t*pir+grhog_t*pig)
 
+
+        ! filling the cache
+        ! background quantities
+        mgcamb_cache%grhob_t    = grhob_t
+        mgcamb_cache%grhoc_t    = grhoc_t
+        mgcamb_cache%grhor_t    = grhor_t
+        mgcamb_cache%grhog_t    = grhog_t
+        mgcamb_cache%gpresnu_t  = gpres_nu
+        mgcamb_cache%grhonu_t   = grhonu_t
+        ! perturbation quantities
+        mgcamb_cache%k          = k
+        mgcamb_cache%k2         = k2
+        mgcamb_cache%etak       = etak
+        ! filling expansion history cache
+        mgcamb_cache%adotoa     = adotoa
+        mgcamb_cache%Hdot       = adotoa**2 - 0.5d0*(grho+gpres)
         ! fill perturbation cache
         mgcamb_cache%dgrho      = dgrho
         mgcamb_cache%dgq        = dgq
         mgcamb_cache%dgpi_w_sum = dgpi_w_sum
         mgcamb_cache%dgpi       = dgpi
-        !mgcamb_cache%dgpi_diff  = dgpi_diff
         mgcamb_cache%rhoDelta   = dgrho + 3._dl * adotoa * dgq/ k
 
-        ! calculate the MG functions
+        ! 2. Computing the MG functions
         call MGCAMB_compute_MG_functions( a, mgcamb_par_cache, mgcamb_cache )
 
-        ! calculate sigma
+        ! 3. Computing the shear perturbation sigma
         call MGCAMB_compute_sigma( a, mgcamb_par_cache, mgcamb_cache )
         sigma = mgcamb_cache%sigma
 
-        ! computing Z requires pidot.
-        ! First, start computing pidot for massless neutrinos and for photons
-
-        !> massless neutrinos
+        ! 4. Computing pidot quantities (sigma is necessary)
+        ! massless neutrinos
         if (EV%no_nu_multpoles) then
             pirdot = 0.d0
         else
@@ -2503,7 +2080,6 @@
             end if
         end if
 
-
         ! Photons: here the second-order tight coupling requires the knowledge of  already, so for now
         ! we do not use pigdot = 0.d0 at second-order tight coupling. The user has to take into account this by setting GRtrans not too early in time
         if (EV%no_phot_multpoles) then
@@ -2512,6 +2088,7 @@
 
             if (EV%tightcoupling) then
                 pigdot = 0.d0 ! It could improve to second order, but requires Z
+                pigdot = EV%pigdot
 
             else
                 E2=ay(EV%polind+2)
@@ -2524,7 +2101,7 @@
                 if (EV%lmaxg>2) then
                     ix= EV%g_ix+2
                     pigdot=EV%denlk(2)*qg-EV%denlk2(2)*ay(ix+1)-opacity*(pig - polter) &
-                        +8._dl/15._dl*k*sigma
+                            +8._dl/15._dl*k*sigma
                 else !closed case
                     pigdot=EV%denlk(2)*qg-opacity*(pig - polter) +8._dl/15._dl*k*sigma
                 endif
@@ -2536,7 +2113,7 @@
         pidot_sum = 0.d0
         pidot_sum = grhog_t*pigdot+grhor_t*pirdot
 
-        !> massive neutrinos contributions.
+        ! massive neutrinos contributions.
         if (CP%Num_Nu_massive >0) then
 
             !DIR$ LOOP COUNT MIN(1), AVG(1)
@@ -2574,7 +2151,7 @@
                             ayprime(ind)=-ayprime(ind-2) -3*cothxor*ay(ind)
                         else
                             ayprime(ind)=v*(EV%denlk(2)*ay(ind-1)-EV%denlk2(2)*ay(ind+1)) &
-                                +k*8._dl/15._dl*sigma
+                            +k*8._dl/15._dl*sigma
                             do l=3,EV%lmaxnu_tau(nu_i)-1
                                 ind=ind+1
                                 ayprime(ind)=v*(EV%denlk(l)*ay(ind-1)-EV%denlk2(l)*ay(ind+1))
@@ -2596,7 +2173,7 @@
                     ind=ind+1
                     ind2=ind2+1
                     ayprime(ind)= -a2*(EV%denlk(l)*ay(ind2-1)-EV%denlk2(l)*ay(ind2+1)) &
-                                    +   (EV%denlk(l)*ay(ind-1)-EV%denlk2(l)*ay(ind+1))
+                    +   (EV%denlk(l)*ay(ind-1)-EV%denlk2(l)*ay(ind+1))
                 end do
                 ind=ind+1
                 ind2=ind2+1
@@ -2609,6 +2186,7 @@
 
         end if
 
+        ! 5. Compute Z
         ! fill the cache
         mgcamb_cache%pidot_sum = pidot_sum
 
@@ -2620,8 +2198,8 @@
 
         ayprime(2)= k*etadot
 
-    else !GR limit ( model = 0 )
-        ! Get sigma (shear) and z from the constraints
+    else ! GR limit
+        !  Get sigma (shear) and z from the constraints
         ! have to get z from eta for numerical stability
         z=(0.5_dl*dgrho/k + etak)/adotoa
         if (CP%flat) then
@@ -2635,45 +2213,15 @@
     end if
     !< MGCAMB MOD END
 
+    !> MGCAMB MOD START: DE perturbed only if not MG
+    if (w_lam /= -1 .and. w_Perturb .and. MG_flag == 0 ) then
+        ayprime(EV%w_ix)= -3*adotoa*(cs2_lam-w_lam)*(clxde+3*adotoa*qde/k) &
+            - k*qde -(1+w_lam)*k*z
 
-    !> MGCAMB MOD START: in case w_lam/=-1 compute the DE perturbations
-    if (w_lam /= -1 .and. w_Perturb .and. model == 0) then
-        ayprime(EV%w_ix)= -3*adotoa*(cs2_lam-w_lam)*(clxq+3*adotoa*(1+w_lam)*vq/k) &
-            -(1+w_lam)*k*vq -(1+w_lam)*k*z
-        ayprime(EV%w_ix+1) = -adotoa*(1-3*cs2_lam)*vq + k*cs2_lam*clxq/(1+w_lam)
+        ayprime(EV%w_ix+1) = (-adotoa*(1-3*cs2_lam)*qde + k*cs2_lam*clxde)/(1+w_lam)
     end if
-    !< MGCAMB MOD END.
+    !< MGCAMB MOD END
 
-    if (associated(EV%OutputTransfer)) then
-        EV%OutputTransfer(Transfer_kh) = k/(CP%h0/100._dl) 
-        EV%OutputTransfer(Transfer_cdm) = clxc
-        EV%OutputTransfer(Transfer_b) = clxb
-        EV%OutputTransfer(Transfer_g) = clxg
-        EV%OutputTransfer(Transfer_r) = clxr
-        clxnu_all=0
-        dgpi  = grhor_t*pir + grhog_t*pig
-        if (CP%Num_Nu_Massive /= 0) then
-            call MassiveNuVarsOut(EV,ay,ayprime,a, clxnu_all =clxnu_all, dgpi= dgpi)
-        end if
-        EV%OutputTransfer(Transfer_nu) = clxnu_all
-        EV%OutputTransfer(Transfer_tot) =  dgrho_matter/grho_matter !includes neutrinos
-        EV%OutputTransfer(Transfer_nonu) = (grhob_t*clxb+grhoc_t*clxc)/(grhob_t + grhoc_t)
-        EV%OutputTransfer(Transfer_tot_de) =  dgrho/grho_matter
-
-        !> MGCAMB MOD START: modifying the Weyl potential
-        !Transfer_Weyl is k^2Phi, where Phi is the Weyl potential
-        if (tempmodel==0) then
-            EV%OutputTransfer(Transfer_Weyl) = -(dgrho+3*dgq*adotoa/k)/(EV%Kf(1)*2) - dgpi/2
-        else
-            EV%OutputTransfer(Transfer_Weyl) = (mgcamb_cache%MG_psi+mgcamb_cache%MG_phi)*k**2._dl/2._dl
-        end if
-        !< MGCAMB MOD END.
-
-        EV%OutputTransfer(Transfer_Newt_vel_cdm)=  -k*sigma/adotoa
-        EV%OutputTransfer(Transfer_Newt_vel_baryon) = -k*(vb + sigma)/adotoa
-        EV%OutputTransfer(Transfer_vel_baryon_cdm) = vb
-    end if
-    
     !  CDM equation of motion
     clxcdot=-k*z
     ayprime(3)=clxcdot
@@ -2691,16 +2239,20 @@
 
     if (EV%TightCoupling) then
         !  ddota/a
-        if (.not. CP%flat ) then
-            gpres=gpres+ (grhog_t+grhor_t)/3 +grhov_t*w_lam
+        !> MGCAMB MOD START
+        if ( MG_flag == 0 ) then
+            gpres=gpres_nu+ (grhog_t+grhor_t)/3 +grhov_t*w_lam
+        else
+            gpres=gpres_nu+ (grhog_t+grhor_t)/3 + mgcamb_cache%gpresv_t
         end if
+        !< MGCAMB MOD END
         adotdota=(adotoa*adotoa-gpres)/2
 
         pig = 32._dl/45/opacity*k*(sigma+vb)
 
         !  First-order approximation to baryon-photon splip
         slip = - (2*adotoa/(1+pb43) + dopacity/opacity)* (vb-3._dl/4*qg) &
-        +(-adotdota*vb-k/2*adotoa*clxg +k*(cs2*clxbdot-clxgdot/4))/(opacity*(1+pb43))
+            +(-adotdota*vb-k/2*adotoa*clxg +k*(cs2*clxbdot-clxgdot/4))/(opacity*(1+pb43))
 
         if (second_order_tightcoupling) then
             ! by Francis-Yan Cyr-Racine simplified (inconsistently) by AL assuming flat
@@ -2709,39 +2261,38 @@
             !  8*pi*G*a*a*SUM[rho_i*sigma_i]
             dgs = grhog_t*pig+grhor_t*pir
 
-            
-            !> MGCAMB MOD START:
-            ! Define shear derivative to first order
-            !sigmadot = -2*adotoa*sigma-dgs/k+etak
-            if ( tempmodel ==0 ) then
+            !> MGCAMB MOD START: simgadot in MG
+            if ( tempmodel == 0 ) then
+                ! Define shear derivative to first order
                 sigmadot = -2*adotoa*sigma-dgs/k+etak
             else
                 sigmadot = mgcamb_cache%sigmadot
             end if
-            !< MGCAMB mod end
-            
+            !< MGCAMB MOD END
+
             !Once know slip, recompute qgdot, pig, pigdot
             qgdot = k*(clxg/4._dl-pig/2._dl) +opacity*slip
 
             pig = 32._dl/45/opacity*k*(sigma+3._dl*qg/4._dl)*(1+(dopacity*11._dl/6._dl/opacity**2)) &
-            + (32._dl/45._dl/opacity**2)*k*(sigmadot+3._dl*qgdot/4._dl)*(-11._dl/6._dl)
+                + (32._dl/45._dl/opacity**2)*k*(sigmadot+3._dl*qgdot/4._dl)*(-11._dl/6._dl)
 
             pigdot = -(32._dl/45._dl)*(dopacity/opacity**2)*k*(sigma+3._dl*qg/4._dl)*(1 + &
-            dopacity*11._dl/6._dl/opacity**2 ) &
-            + (32._dl/45._dl/opacity)*k*(sigmadot+3._dl*qgdot/4._dl)*(1+(11._dl/6._dl) &
-            *(dopacity/opacity**2))
+                dopacity*11._dl/6._dl/opacity**2 ) &
+                + (32._dl/45._dl/opacity)*k*(sigmadot+3._dl*qgdot/4._dl)*(1+(11._dl/6._dl) &
+                *(dopacity/opacity**2))
 
             EV%pigdot = pigdot
+
         end if
 
         !  Use tight-coupling approximation for vb
         !  zeroth order approximation to vbdot + the pig term
         vbdot=(-adotoa*vb+cs2*k*clxb  &
-        +k/4*pb43*(clxg-2*EV%Kf(1)*pig))/(1+pb43)
+            +k/4*pb43*(clxg-2*EV%Kf(1)*pig))/(1+pb43)
 
         vbdot=vbdot+pb43/(1+pb43)*slip
-
         EV%pig = pig
+
     else
         vbdot=-adotoa*vb+cs2*k*clxb-photbar*opacity*(4._dl/3*vb-qg)
     end if
@@ -2752,7 +2303,7 @@
         !  Photon equations of motion
         ayprime(EV%g_ix)=clxgdot
         qgdot=4._dl/3*(-vbdot-adotoa*vb+cs2*k*clxb)/pb43 &
-        +EV%denlk(1)*clxg-EV%denlk2(1)*pig
+            +EV%denlk(1)*clxg-EV%denlk2(1)*pig
         ayprime(EV%g_ix+1)=qgdot
 
         !  Use explicit equations for photon moments if appropriate
@@ -2762,7 +2313,7 @@
             ix= EV%g_ix+2
             if (EV%lmaxg>2) then
                 pigdot=EV%denlk(2)*qg-EV%denlk2(2)*ay(ix+1)-opacity*(pig - polter) &
-                +8._dl/15._dl*k*sigma
+                    +8._dl/15._dl*k*sigma
                 ayprime(ix)=pigdot
                 do  l=3,EV%lmaxg-1
                     ix=ix+1
@@ -2787,7 +2338,7 @@
                 ix=ix+1
                 !truncate
                 ayprime(ix)=-opacity*ay(ix) + &
-                k*EV%poltruncfac*ay(ix-1)-(EV%lmaxgpol+3)*cothxor*ay(ix)
+                    k*EV%poltruncfac*ay(ix-1)-(EV%lmaxgpol+3)*cothxor*ay(ix)
             else !closed case
                 ayprime(ix) = -opacity*(ay(ix) - polter)
             endif
@@ -2840,62 +2391,347 @@
     end if ! no_nu_multpoles
 
     !  Massive neutrino equations of motion.
-    if (CP%Num_Nu_massive == 0) return
+    if (CP%Num_Nu_massive >0) then
+        !DIR$ LOOP COUNT MIN(1), AVG(1)
+        do nu_i = 1, CP%Nu_mass_eigenstates
+            if (EV%MassiveNuApprox(nu_i)) then
+                !Now EV%iq0 = clx, EV%iq0+1 = clxp, EV%iq0+2 = G_1, EV%iq0+3=G_2=pinu
+                !see astro-ph/0203507
+                G11_t=EV%G11(nu_i)/a/a2
+                G30_t=EV%G30(nu_i)/a/a2
+                off_ix = EV%nu_ix(nu_i)
+                w=wnu_arr(nu_i)
+                ayprime(off_ix)=-k*z*(w+1) + 3*adotoa*(w*ay(off_ix) - ay(off_ix+1))-k*ay(off_ix+2)
+                ayprime(off_ix+1)=(3*w-2)*adotoa*ay(off_ix+1) - 5._dl/3*k*z*w - k/3*G11_t
+                ayprime(off_ix+2)=(3*w-1)*adotoa*ay(off_ix+2) - k*(2._dl/3*EV%Kf(1)*ay(off_ix+3)-ay(off_ix+1))
+                ayprime(off_ix+3)=(3*w-2)*adotoa*ay(off_ix+3) + 2*w*k*sigma - k/5*(3*EV%Kf(2)*G30_t-2*G11_t)
+            else
+                ind=EV%nu_ix(nu_i)
+                !DIR$ LOOP COUNT MIN(3), AVG(3)
+                do i=1,EV%nq(nu_i)
+                    q=nu_q(i)
+                    aq=a*nu_masses(nu_i)/q
+                    v=1._dl/sqrt(1._dl+aq*aq)
 
-    do nu_i = 1, CP%Nu_mass_eigenstates
-        if (EV%MassiveNuApprox(nu_i)) then
-            !Now EV%iq0 = clx, EV%iq0+1 = clxp, EV%iq0+2 = G_1, EV%iq0+3=G_2=pinu
-            !see astro-ph/0203507
-            G11_t=EV%G11(nu_i)/a/a2
-            G30_t=EV%G30(nu_i)/a/a2
-            off_ix = EV%nu_ix(nu_i)
-            w=wnu_arr(nu_i)
-            ayprime(off_ix)=-k*z*(w+1) + 3*adotoa*(w*ay(off_ix) - ay(off_ix+1))-k*ay(off_ix+2)
-            ayprime(off_ix+1)=(3*w-2)*adotoa*ay(off_ix+1) - 5._dl/3*k*z*w - k/3*G11_t
-            ayprime(off_ix+2)=(3*w-1)*adotoa*ay(off_ix+2) - k*(2._dl/3*EV%Kf(1)*ay(off_ix+3)-ay(off_ix+1))
-            ayprime(off_ix+3)=(3*w-2)*adotoa*ay(off_ix+3) + 2*w*k*sigma - k/5*(3*EV%Kf(2)*G30_t-2*G11_t)
-        else
-            ind=EV%nu_ix(nu_i)
-            do i=1,EV%nq(nu_i)
-                q=nu_q(i)
-                aq=a*nu_masses(nu_i)/q
-                v=1._dl/sqrt(1._dl+aq*aq)
-
-                ayprime(ind)=-k*(4._dl/3._dl*z + v*ay(ind+1))
-                ind=ind+1
-                ayprime(ind)=v*(EV%denlk(1)*ay(ind-1)-EV%denlk2(1)*ay(ind+1))
-                ind=ind+1
-                if (EV%lmaxnu_tau(nu_i)==2) then
-                    ayprime(ind)=-ayprime(ind-2) -3*cothxor*ay(ind)
-                else
-                    ayprime(ind)=v*(EV%denlk(2)*ay(ind-1)-EV%denlk2(2)*ay(ind+1)) &
-                    +k*8._dl/15._dl*sigma
-                    do l=3,EV%lmaxnu_tau(nu_i)-1
-                        ind=ind+1
-                        ayprime(ind)=v*(EV%denlk(l)*ay(ind-1)-EV%denlk2(l)*ay(ind+1))
-                    end do
-                    !  Truncate moment expansion.
+                    ayprime(ind)=-k*(4._dl/3._dl*z + v*ay(ind+1))
+                    ind=ind+1
+                    ayprime(ind)=v*(EV%denlk(1)*ay(ind-1)-EV%denlk2(1)*ay(ind+1))
+                    ind=ind+1
+                    if (EV%lmaxnu_tau(nu_i)==2) then
+                        ayprime(ind)=-ayprime(ind-2) -3*cothxor*ay(ind)
+                    else
+                        ayprime(ind)=v*(EV%denlk(2)*ay(ind-1)-EV%denlk2(2)*ay(ind+1)) &
+                            +k*8._dl/15._dl*sigma
+                        do l=3,EV%lmaxnu_tau(nu_i)-1
+                            ind=ind+1
+                            ayprime(ind)=v*(EV%denlk(l)*ay(ind-1)-EV%denlk2(l)*ay(ind+1))
+                        end do
+                        !  Truncate moment expansion.
+                        ind = ind+1
+                        ayprime(ind)=k*v*ay(ind-1)-(EV%lmaxnu_tau(nu_i)+1)*cothxor*ay(ind)
+                    end if
                     ind = ind+1
-                    ayprime(ind)=k*v*ay(ind-1)-(EV%lmaxnu_tau(nu_i)+1)*cothxor*ay(ind)
-                end if
-                ind = ind+1
-            end do
-        end if
-    end do
+                end do
+            end if
+        end do
 
-    if (EV%has_nu_relativistic) then
-        ind=EV%nu_pert_ix
-        ayprime(ind)=+k*a2*qr -k*ay(ind+1)
-        ind2= EV%r_ix
-        do l=1,EV%lmaxnu_pert-1
+        if (EV%has_nu_relativistic) then
+            ind=EV%nu_pert_ix
+            ayprime(ind)=+k*a2*qr -k*ay(ind+1)
+            ind2= EV%r_ix
+            do l=1,EV%lmaxnu_pert-1
+                ind=ind+1
+                ind2=ind2+1
+                ayprime(ind)= -a2*(EV%denlk(l)*ay(ind2-1)-EV%denlk2(l)*ay(ind2+1)) &
+                    +   (EV%denlk(l)*ay(ind-1)-EV%denlk2(l)*ay(ind+1))
+            end do
             ind=ind+1
             ind2=ind2+1
-            ayprime(ind)= -a2*(EV%denlk(l)*ay(ind2-1)-EV%denlk2(l)*ay(ind2+1)) &
-            +   (EV%denlk(l)*ay(ind-1)-EV%denlk2(l)*ay(ind+1))
-        end do
-        ind=ind+1
-        ind2=ind2+1
-        ayprime(ind)= k*(ay(ind-1) -a2*ay(ind2-1)) -(EV%lmaxnu_pert+1)*cothxor*ay(ind)
+            ayprime(ind)= k*(ay(ind-1) -a2*ay(ind2-1)) -(EV%lmaxnu_pert+1)*cothxor*ay(ind)
+        end if
+    end if
+
+    !> MGCAMB NOTE START:
+    ! the following part was not present in the previous versions of MGCAMB
+    ! and replaces the old output subroutine
+    !< MGCAMB NOTE END
+
+    if (associated(EV%OutputTransfer) .or. associated(EV%OutputSources)) then
+        if (EV%TightCoupling .or. EV%no_phot_multpoles) then
+            E=0
+            Edot=0
+        else
+            E = ay(EV%polind+2:EV%polind+3)
+            Edot = ayprime(EV%polind+2:EV%polind+3)
+        end if
+        if (EV%no_nu_multpoles) then
+            pirdot=0
+            qrdot = -4*dz/3
+        end if
+        if (EV%no_phot_multpoles) then
+            pigdot=0
+            octg=0
+            octgdot=0
+            qgdot = -4*dz/3
+        else
+            if (EV%TightCoupling) then
+                if (second_order_tightcoupling) then
+                    octg = (3._dl/7._dl)*pig*(EV%k_buf/opacity)
+                    E(2) = pig/4 + pigdot*(1._dl/opacity)*(-5._dl/8._dl)
+                    E(3) = (3._dl/7._dl)*(EV%k_buf/opacity)*E(2)
+                    Edot(2)= (pigdot/4._dl)*(1+(5._dl/2._dl)*(dopacity/opacity**2))
+                else
+                    pigdot = -dopacity/opacity*pig + 32._dl/45*k/opacity*(-2*adotoa*sigma  &
+                        +etak/EV%Kf(1)-  dgpi/k +vbdot )
+                    Edot(2) = pigdot/4
+                    E(2) = pig/4
+                    octg=0
+                end if
+                octgdot=0
+            else
+                octg=ay(EV%g_ix+3)
+                octgdot=ayprime(EV%g_ix+3)
+            end if
+        end if
+
+        dgpi  = grhor_t*pir + grhog_t*pig
+        dgpi_diff = 0  !sum (3*p_nu -rho_nu)*pi_nu
+        pidot_sum = grhog_t*pigdot + grhor_t*pirdot
+        clxnu =0
+        if (CP%Num_Nu_Massive /= 0) then
+            call MassiveNuVarsOut(EV,ay,ayprime,a, dgpi=dgpi, clxnu_all=clxnu, &
+                dgpi_diff=dgpi_diff, pidot_sum=pidot_sum)
+        end if
+        diff_rhopi = pidot_sum - (4*dgpi+ dgpi_diff)*adotoa
+
+        !> MGCAMB MOD START
+        if ( tempmodel /= 0 ) then
+            mgcamb_cache%dgpi_diff = dgpi_diff
+            ! redefining pidot_sum (more accurate)
+            mgcamb_cache%pidot_sum = pidot_sum
+        end if
+        !< MGCAMB MOD END
+
+        !> MGCAMB MOD START: modifying hte expansion histroy
+        if ( MG_flag == 0 ) then
+            gpres=gpres_nu+ (grhog_t+grhor_t)/3 +grhov_t*w_lam
+        else
+            gpres=gpres_nu+ (grhog_t+grhor_t)/3 + mgcamb_cache%gpresv_t
+        end if
+
+        !> MGCAMB Mmodified OD START: Weyl Potential
+        if ( tempmodel == 0 ) then
+            phi = -((dgrho +3*dgq*adotoa/k)/EV%Kf(1) + dgpi)/(2*k2)
+        else
+            phi = (mgcamb_cache%MG_psi+mgcamb_cache%MG_phi)/2._dl
+        end if
+        !< MGCAMB MOD END
+
+        if (associated(EV%OutputTransfer)) then
+            EV%OutputTransfer(Transfer_kh) = k/(CP%h0/100._dl)
+            EV%OutputTransfer(Transfer_cdm) = clxc
+            EV%OutputTransfer(Transfer_b) = clxb
+            EV%OutputTransfer(Transfer_g) = clxg
+            EV%OutputTransfer(Transfer_r) = clxr
+            EV%OutputTransfer(Transfer_nu) = clxnu
+            EV%OutputTransfer(Transfer_tot) =  dgrho_matter/grho_matter !includes neutrinos
+            EV%OutputTransfer(Transfer_nonu) = (grhob_t*clxb+grhoc_t*clxc)/(grhob_t + grhoc_t)
+            EV%OutputTransfer(Transfer_tot_de) =  dgrho/grho_matter
+            !> MGCAMB MOD START: modifying the Weyl potential
+            !Transfer_Weyl is k^2Phi, where Phi is the Weyl potential
+            if ( tempmodel == 0 ) then
+                EV%OutputTransfer(Transfer_Weyl) = k2*phi
+            else
+                EV%OutputTransfer(Transfer_Weyl) = (mgcamb_cache%MG_psi+mgcamb_cache%MG_phi)*k**2._dl/2._dl
+            end if
+            !< MGCAMB MOD END.
+
+            EV%OutputTransfer(Transfer_Newt_vel_cdm)=  -k*sigma/adotoa
+            EV%OutputTransfer(Transfer_Newt_vel_baryon) = -k*(vb + sigma)/adotoa
+            EV%OutputTransfer(Transfer_vel_baryon_cdm) = vb
+        end if
+        if (associated(EV%OutputSources)) then
+
+            call IonizationFunctionsAtTime(tau, opacity, dopacity, ddopacity, &
+                visibility, dvisibility, ddvisibility, exptau, lenswindow)
+
+            tau0 = CP%tau0
+
+            !> MGCAMB MOD START: modifying ISW and TT sources
+            if ( tempmodel == 0 ) then
+
+                phidot = (1.0d0/2.0d0)*(adotoa*(-dgpi - 2*k2*phi) + dgq*k - &
+                        diff_rhopi+ k*sigma*(gpres + grho))/k2
+                !time derivative of shear
+                sigmadot = -adotoa*sigma - 1.0d0/2.0d0*dgpi/k + k*phi
+
+                ISW = 2*phidot*exptau
+
+                !quadrupole source derivatives; polter = pi_g/10 + 3/5 E_2
+                polter = pig/10+9._dl/15*E(2)
+                polterdot = (1.0d0/10.0d0)*pigdot + (3.0d0/5.0d0)*Edot(2)
+                polterddot = -2.0d0/25.0d0*adotoa*dgq/(k*EV%Kf(1)) - 4.0d0/75.0d0*adotoa* &
+                    k*sigma - 4.0d0/75.0d0*dgpi - 2.0d0/75.0d0*dgrho/EV%Kf(1) - 3.0d0/ &
+                    50.0d0*k*octgdot*EV%Kf(2) + (1.0d0/25.0d0)*k*qgdot - 1.0d0/5.0d0 &
+                    *k*EV%Kf(2)*Edot(3) + (-1.0d0/10.0d0*pig + (7.0d0/10.0d0)* &
+                    polter - 3.0d0/5.0d0*E(2))*dopacity + (-1.0d0/10.0d0*pigdot &
+                    + (7.0d0/10.0d0)*polterdot - 3.0d0/5.0d0*Edot(2))*opacity
+                !Temperature source terms, after integrating by parts in conformal time
+
+                !2phi' term (\phi' + \psi' in Newtonian gauge), phi is the Weyl potential
+                ISW = 2*phidot*exptau
+                monopole_source =  (-etak/(k*EV%Kf(1)) + 2*phi + clxg/4)*visibility
+                doppler = ((sigma + vb)*dvisibility + (sigmadot + vbdot)*visibility)/k
+                quadrupole_source = (5.0d0/8.0d0)*(3*polter*ddvisibility + 6*polterdot*dvisibility &
+                    + (k**2*polter + 3*polterddot)*visibility)/k**2
+
+                EV%OutputSources(1) = ISW + doppler + monopole_source + quadrupole_source
+
+            else
+
+                ! compute MG ISW
+                call MGCAMB_compute_ISW( a, mgcamb_par_cache, mgcamb_cache )
+
+                ISW = exptau * mgcamb_cache%MG_ISW
+
+                sigmadot = mgcamb_cache%sigmadot
+
+                polter      = pig/10+9._dl/15*E(2)
+                polterdot   = 9._dl/15._dl*Edot(2) + 0.1_dl*pigdot
+
+                ! old version
+                !EV%OutputSources(1) = ISW+&
+                !    visibility* (clxg/4.D0 +polter/1.6d0 + vbdot/k -9.D0*(polterdot)/k2*&
+                !    opacity/16.D0-9.D0/16.D0*dopacity* polter/k2&
+                !    + 2.1d0*mgcamb_cache%MG_alphadot + 3.D0/40.D0 *qgdot/k &!+21.D0/10.D0*dgpi/k2&
+                !    +(-3.D0/8.D0*EV%Kf(2)*Edot(3) - 9.D0/80.D0*EV%Kf(2)*octgdot)/k)&
+                !    + (mgcamb_cache%MG_alpha+vb/k+30.0d0/8.0d0 *polterdot/k2)*dvisibility&
+                !    + ddvisibility*30.0d0/16.0d0*polter/k2
+
+                ! new version
+                EV%OutputSources(1) = ISW&
+                & +visibility* (clxg/4.D0 + polter/1.6d0 + vbdot/k -9.D0*(polterdot)/k2*opacity/16.D0 &
+                & -9.D0/16.D0*dopacity*polter/k2&
+                & + 21.D0/10.D0*mgcamb_cache%MG_alphadot + 3.D0/40.D0*qgdot/k &
+                & +(-3.D0/8.D0*EV%Kf(2)*Edot(3) - 9.D0/80.D0*EV%Kf(2)*octgdot)/k)&
+                & +((-9.D0/160.D0*pig-27.D0/80.D0*E(2))/k**2*opacity+(11.D0/10.D0*sigma- &
+                & 3.D0/8.D0*EV%Kf(2)*E(3)+vb-9.D0/80.D0*EV%Kf(2)*octg+3.D0/40.D0*qg)/k-(- &
+                & 180.D0*Edot(2)-30.D0*pigdot)/k**2/160.D0)*dvisibility&
+                & +(3.D0/16.D0*ddvisibility*pig+9.D0/8.D0*ddvisibility*E(2))/k**2
+
+            end if
+            !< MGCAMB MOD END
+
+            if (tau < tau0) then
+                !E polarization source
+                EV%OutputSources(2)=visibility*polter*(15._dl/8._dl)/(f_K(tau0-tau)**2*k2)
+                !factor of four because no 1/16 later
+            else
+                EV%OutputSources(2)=0
+            end if
+
+            if (size(EV%OutputSources) > 2) then
+                !Get lensing sources
+                !Can modify this here if you want to get power spectra for other tracer
+                if (tau>tau_maxvis .and. tau0-tau > 0.1_dl) then
+                    !> MGCAMB MOD START
+                    if ( tempmodel == 0 ) then
+                        EV%OutputSources(3) = -2*phi*f_K(tau-tau_maxvis)/(f_K(tau0-tau_maxvis)*f_K(tau0-tau))
+                        !We include the lensing factor of two here
+                    else
+                        call MGCAMB_compute_lensing( a, mgcamb_par_cache, mgcamb_cache )
+                        EV%OutputSources(3) = -mgcamb_cache%MG_lensing*f_K(tau-tau_maxvis)/&
+                                            & (f_K(CP%tau0-tau_maxvis)*f_K(CP%tau0-tau))
+                    end if
+                    !< MGCAMB MOD END
+                else
+                    EV%OutputSources(3) = 0
+                end if
+            end if
+            if (associated(EV%CustomSources)) then
+                call custom_sources_func(EV%CustomSources, tau, a, adotoa, grho, gpres,w_lam, cs2_lam, &
+                    grhob_t,grhor_t,grhoc_t,grhog_t,grhov_t,grhonu_t, &
+                    k, etak, ayprime(2), phi, phidot, sigma, sigmadot, &
+                    dgrho, clxg,clxb,clxc,clxr, clxnu, clxde, cs2*clxb, &
+                    dgq, qg, qr, qde, vb, qgdot, qrdot, vbdot, &
+                    dgpi, pig, pir, pigdot, pirdot, diff_rhopi, &
+                    polter, polterdot, polterddot, octg, octgdot, E, Edot, &
+                    opacity, dopacity, ddopacity, visibility, dvisibility, ddvisibility, exptau, &
+                    tau0, tau_maxvis, EV%Kf,f_K)
+            end if
+
+        end if
+
+        !> MGCAMB MOD START
+        if ( DebugMGCAMB ) then
+
+            !write(*,*) 'writing cache at a,k:', a,k
+
+            if ( tempmodel == 0 ) then
+                ! fill the cache with the GR stuff, then dump the cache,
+                ! useful for comparing default CAMB with MGCAMB in GR limit
+                mgcamb_cache%grhob_t    = grhob_t
+                mgcamb_cache%grhoc_t    = grhoc_t
+                mgcamb_cache%grhor_t    = grhor_t
+                mgcamb_cache%grhog_t    = grhog_t
+                mgcamb_cache%gpresnu_t  = gpres_nu
+                mgcamb_cache%grhonu_t   = grhonu_t
+                ! perturbation quantities
+                mgcamb_cache%k          = k
+                mgcamb_cache%k2         = k2
+                mgcamb_cache%etak       = etak
+                ! filling expansion history cache
+                mgcamb_cache%adotoa     = adotoa
+                mgcamb_cache%Hdot       = adotoa**2 - 0.5d0*(grho+gpres)
+                ! fill perturbation cache
+                mgcamb_cache%dgrho      = dgrho
+                mgcamb_cache%dgq        = dgq
+                mgcamb_cache%dgpi_w_sum = dgpi_w_sum
+                mgcamb_cache%dgpi       = dgpi
+                mgcamb_cache%rhoDelta   = dgrho + 3._dl * adotoa * dgq/ k
+                mgcamb_cache%pidot_sum  = pidot_sum
+
+                ! Einstein solutions
+                mgcamb_cache%z          = z
+                mgcamb_cache%sigma      = sigma
+                mgcamb_cache%sigmadot   = sigmadot
+                mgcamb_cache%etadot     = ayprime(2)/k
+                mgcamb_cache%MG_Psi     = 0._dl         !< this needs to be changed
+                mgcamb_cache%MG_Phi     = 0._dl         !< this needs to be changed
+                mgcamb_cache%MG_Psidot  = 0._dl         !< this needs to be changed
+                mgcamb_cache%MG_Phidot  = 0._dl         !< this needs to be changed
+                mgcamb_cache%MG_ISW     = 2._dl*phidot
+                mgcamb_cache%MG_lensing = 2._dl*phi
+
+                ! MG functions
+                mgcamb_cache%mu = 1._dl
+                mgcamb_cache%gamma = 1._dl
+                mgcamb_cache%q = 1._dl
+                mgcamb_cache%r = 1._dl
+
+            end if
+
+
+
+            if (associated(EV%OutputSources)) then
+                 mgcamb_cache%source1 = EV%OutputSources(1)
+
+                if (size(EV%OutputSources) > 2) then
+                    mgcamb_cache%source3 = EV%OutputSources(3)
+                else
+                    mgcamb_cache%source3 = 0._dl
+                end if
+            else
+                mgcamb_cache%source1 = 0._dl
+                mgcamb_cache%source3 = 0._dl
+            end if
+
+            ! dump cache into files
+            call MGCAMB_dump_cache( a, mgcamb_cache )
+
+        end if
+        !< MGCAMB MOD END
+
     end if
 
     end subroutine derivs
@@ -2945,7 +2781,7 @@
     end if
 
     finished_tightcoupling = &
-    ((k/opacity > ep).or.(1._dl/(opacity*tau) > ep .and. k/opacity > 1d-4))
+        ((k/opacity > ep).or.(1._dl/(opacity*tau) > ep .and. k/opacity > 1d-4))
 
 
     ! Compute expansion rate from: grho=8*pi*rho*a**2
@@ -2993,22 +2829,22 @@
 
         !  Equation for the photon anisotropic stress
         yvprime(5)=k*(2._dl/5*qg -8/15._dl*yv(6))+8._dl/15._dl*k*sigma  &
-        -opacity*(pig - polter)
+            -opacity*(pig - polter)
         ! And for the moments
         do  l=3,EV%lmaxv-1
             yvprime(l+3)=k*denl(l)*l*(yv(l+2)-   &
-            vecfac(l)*yv(l+4))-opacity*yv(l+3)
+                vecfac(l)*yv(l+4))-opacity*yv(l+3)
         end do
         !  Truncate the hierarchy
         yvprime(EV%lmaxv+3)=k*EV%lmaxv/(EV%lmaxv-1._dl)*yv(EV%lmaxv+2)- &
-        (EV%lmaxv+2._dl)*yv(EV%lmaxv+3)/tau-opacity*yv(EV%lmaxv+3)
+            (EV%lmaxv+2._dl)*yv(EV%lmaxv+3)/tau-opacity*yv(EV%lmaxv+3)
 
         !E equations
 
         Eprime(2) = - opacity*(E(2) - polter) + k*(1/3._dl*B(2) - 8._dl/27._dl*E(3))
         do l=3,EV%lmaxpolv-1
             Eprime(l) =-opacity*E(l) + k*(denl(l)*(l*E(l-1) - &
-            vecfacpol(l)*E(l+1)) + 2._dl/(l*(l+1))*B(l))
+                vecfacpol(l)*E(l+1)) + 2._dl/(l*(l+1))*B(l))
         end do
         !truncate
         Eprime(EV%lmaxpolv)=0._dl
@@ -3017,7 +2853,7 @@
 
         do l=2,EV%lmaxpolv-1
             Bprime(l) =-opacity*B(l) + k*(denl(l)*(l*B(l-1) - &
-            vecfacpol(l)*B(l+1)) - 2._dl/(l*(l+1))*E(l))
+                vecfacpol(l)*B(l+1)) - 2._dl/(l*(l+1))*E(l))
         end do
         !truncate
         Bprime(EV%lmaxpolv)=0._dl
@@ -3029,14 +2865,14 @@
         EV%pig = pig
 
         vbdot=(-adotoa*vb  -3._dl/8*pb43*k*Magnetic  -3._dl/8*k*pb43*pig &
-        - pb43/(1+pb43)/opacity*(0.75_dl*k*adotoa*pb43**2/(pb43+1)*Magnetic + vb*&
-        ( 2*pb43*adotoa**2/(1+pb43) + adotdota)) &
-        )/(1+pb43)
+            - pb43/(1+pb43)/opacity*(0.75_dl*k*adotoa*pb43**2/(pb43+1)*Magnetic + vb*&
+            ( 2*pb43*adotoa**2/(1+pb43) + adotdota)) &
+            )/(1+pb43)
 
         !  Equation for the photon heat flux
         ! Get drag from vbdot expression
         yvprime(4)=-0.5_dl*k*pig - &
-        (vbdot+adotoa*vb)/photbar - 0.5_dl*k*Magnetic
+            (vbdot+adotoa*vb)/photbar - 0.5_dl*k*Magnetic
 
         !  Set the derivatives to zero
         yvprime(5:n)=0._dl
@@ -3059,7 +2895,7 @@
 
     !  Truncate the hierarchy
     neutprime(EV%lmaxnrv)=k*EV%lmaxnrv/(EV%lmaxnrv-1._dl)*neut(EV%lmaxnrv-1)-  &
-    (EV%lmaxnrv+2._dl)*neut(EV%lmaxnrv)/tau
+        (EV%lmaxnrv+2._dl)*neut(EV%lmaxnrv)/tau
 
 
     !  Get the propagation equation for the shear
@@ -3155,7 +2991,7 @@
 
         if (EV%lmaxt > 2) then
             aytprime(ind)=-EV%denlkt(2,2)*ayt(ind+1)+k*8._dl/15._dl*shear  &
-            -opacity*(pig - polter)
+                -opacity*(pig - polter)
 
             do l=3, EV%lmaxt -1
                 ind = ind+1
@@ -3165,16 +3001,16 @@
             !Truncate the hierarchy
             ind=ind+1
             aytprime(ind)=k*EV%lmaxt/(EV%lmaxt-2._dl)*ayt(ind-1)- &
-            (EV%lmaxt+3._dl)*cothxor*ayt(ind)-opacity*ayt(ind)
+                (EV%lmaxt+3._dl)*cothxor*ayt(ind)-opacity*ayt(ind)
 
             !E and B-bar equations
 
             Eprime(2) = - opacity*(E(2) - polter) + EV%denlkt(4,2)*B(2) - &
-            EV%denlkt(3,2)*E(3)
+                EV%denlkt(3,2)*E(3)
 
             do l=3, EV%lmaxpolt-1
                 Eprime(l) =(EV%denlkt(1,L)*E(l-1)-EV%denlkt(3,L)*E(l+1) + EV%denlkt(4,L)*B(l)) &
-                -opacity*E(l)
+                    -opacity*E(l)
             end do
             l= EV%lmaxpolt
             !truncate: difficult, but setting l+1 to zero seems to work OK
@@ -3183,7 +3019,7 @@
             Bprime(2) =-EV%denlkt(3,2)*B(3) - EV%denlkt(4,2)*E(2)  -opacity*B(2)
             do l=3, EV%lmaxpolt-1
                 Bprime(l) =(EV%denlkt(1,L)*B(l-1) -EV%denlkt(3,L)*B(l+1) - EV%denlkt(4,L)*E(l)) &
-                -opacity*B(l)
+                    -opacity*B(l)
             end do
             l=EV%lmaxpolt
             !truncate
@@ -3191,9 +3027,9 @@
 
         else !lmax=2
 
-        aytprime(ind)=k*8._dl/15._dl*shear-opacity*(pig - polter)
-        Eprime(2) = - opacity*(E(2) - polter) + EV%denlkt(4,2)*B(2)
-        Bprime(2) = - EV%denlkt(4,2)*E(2)  -opacity*B(2)
+            aytprime(ind)=k*8._dl/15._dl*shear-opacity*(pig - polter)
+            Eprime(2) = - opacity*(E(2) - polter) + EV%denlkt(4,2)*B(2)
+            Bprime(2) = - EV%denlkt(4,2)*E(2)  -opacity*B(2)
         end if
 
     else  !Tight coupling
@@ -3217,14 +3053,14 @@
         if (EV%lmaxnrt>2) then
             pirdt=-EV%denlkt(2,2)*neut(3) + 8._dl/15._dl*k*shear
             neutprime(2)=pirdt
-           !  And for the moments
+            !  And for the moments
             do  l=3, EV%lmaxnrt-1
                 neutprime(l)= EV%denlkt(1,L)*neut(l-1) -EV%denlkt(2,L)*neut(l+1)
             end do
 
             !  Truncate the hierarchy
             neutprime(EV%lmaxnrt)=k*EV%lmaxnrt/(EV%lmaxnrt-2._dl)*neut(EV%lmaxnrt-1)-  &
-            (EV%lmaxnrt+3._dl)*cothxor*neut(EV%lmaxnrt)
+                (EV%lmaxnrt+3._dl)*cothxor*neut(EV%lmaxnrt)
         else
             pirdt= 8._dl/15._dl*k*shear
             neutprime(2)=pirdt
