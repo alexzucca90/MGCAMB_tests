@@ -155,6 +155,10 @@ CAMB_validateparams.restype = c_bool
 CAMB_setinitialpower = camblib.__handles_MOD_camb_setinitialpower
 CAMB_SetNeutrinoHierarchy = camblib.__camb_MOD_camb_setneutrinohierarchy
 
+# MGCAMB MOD START
+MGCAMB_setparams = camblib.__mghandles_MOD_mgcamb_setparams
+# MGCAMB MOD END
+
 numpy_1d = np.ctypeslib.ndpointer(c_double, flags='C_CONTIGUOUS')
 CAMB_primordialpower = camblib.__handles_MOD_camb_primordialpower
 CAMB_primordialpower.restype = c_bool
@@ -312,6 +316,11 @@ class CAMBparams(CAMB_Structure):
         assert (isinstance(initial_power_params, ipow.InitialPowerParams))
         CAMB_setinitialpower(byref(self), byref(initial_power_params))
         return self
+    
+    def set_mgcamb(self, flags, model_pars, pars_cache):
+        """
+           Set all the MGCAMB parameters
+        """
 
     def set_cosmology(self, H0=67.0, cosmomc_theta=None, ombh2=0.022, omch2=0.12, omk=0.0,
                       neutrino_hierarchy='degenerate', num_massive_neutrinos=1,
