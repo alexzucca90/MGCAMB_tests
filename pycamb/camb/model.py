@@ -3,6 +3,7 @@ from ctypes import c_bool, c_int, c_double, c_float, byref, POINTER
 from . import reionization as ion
 from . import recombination as recomb
 from . import initialpower as ipow
+from . import mgcamb
 from . import constants
 import numpy as np
 from . import bbn
@@ -243,6 +244,9 @@ class CAMBparams(CAMB_Structure):
         ("AccurateReionization", c_int),  # logical
         ("MassiveNuMethod", c_int),
         ("InitPower", ipow.InitialPowerParams),
+        ("mgcamb_flags", mgcamb.MGCAMBFlags),
+        ("mgcamb_model_pars", mgcamb.MGCAMBModelParams),
+        ("mgcamb_par_cache", mgcamb.MGCAMB_parameter_cache)
         ("Reion", ion.ReionizationParams),
         ("Recomb", recomb.RecombinationParams),
         ("Transfer", TransferParams),

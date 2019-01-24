@@ -122,19 +122,17 @@
     end if
 
     !> MGCAMB MOD START
-    mgcamb_par_cache%omegab = P%omegab
-    mgcamb_par_cache%omegac = P%omegac
-    mgcamb_par_cache%omegav = P%omegav
-    mgcamb_par_cache%h0     = P%H0
-    mgcamb_par_cache%h0_Mpc = P%H0 * (1.d3/c)
-    mgcamb_par_cache%output_root = outroot
+    P%mgcamb_par_cache%omegab = P%omegab
+    P%mgcamb_par_cache%omegac = P%omegac
+    P%mgcamb_par_cache%omegav = P%omegav
+    P%mgcamb_par_cache%h0     = P%H0
+    P%mgcamb_par_cache%h0_Mpc = P%H0 * (1.d3/c)
+    P%mgcamb_par_cache%output_root = outroot
     !< MGCAMB MOD END
 
     !> MGCAMB MOD START: reading models and params
-    call MGCAMB_read_model_params( mgcamb_par_cache )
+    call MGCAMB_read_model_params( P%mgcamb_par_cache, P%mgcamb_flags, P%mgcamb_model_pars )
     !< MGCAMB MOD END
-
-
 
     P%tcmb   = Ini_Read_Double('temp_cmb',COBE_CMBTemp)
     P%yhe    = Ini_Read_Double('helium_fraction',0.24_dl)

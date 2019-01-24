@@ -31,6 +31,9 @@
     use Reionization
     use Recombination
     use Errors
+    !> MGCAMB MOD START
+    use MGCAMB_cache
+    !< MGCAMB MOD END
 
     implicit none
     public
@@ -159,6 +162,12 @@
         real(dl) omegak
         real(dl) curv,r, Ksign !CP%r = 1/sqrt(|CP%curv|), CP%Ksign = 1,0 or -1
         real(dl) tau0,chi0 !time today and rofChi(CP%tau0/CP%r)
+
+        !> MGCAMB MOD START: adding the MGCAMB parameters
+        Type(MGCAMBFlags)               :: mgcamb_flags
+        Type(MGCAMBModelParams)         :: mgcamb_model_pars
+        Type(MGCAMB_parameter_cache)    :: mgcamb_par_cache
+        !< MGCAMB MOD END
 
     end type CAMBparams
 
