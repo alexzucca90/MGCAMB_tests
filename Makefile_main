@@ -47,7 +47,7 @@ CAMBSO       =  $(DLL_DIR)/constants.o $(DLL_DIR)/mgcamb.o $(DLL_DIR)/utils.o $(
 	$(DLL_DIR)/inifile.o  $(DLL_DIR)/$(POWERSPECTRUM).o  $(DLL_DIR)/$(RECOMBINATION).o \
 	$(DLL_DIR)/$(REIONIZATION).o $(DLL_DIR)/modules.o $(DLL_DIR)/bessels.o $(DLL_DIR)/$(EQUATIONS).o \
 	$(DLL_DIR)/$(NONLINEAR).o $(DLL_DIR)/lensing.o $(DLL_DIR)/$(BISPECTRUM).o $(DLL_DIR)/cmbmain.o \
-	$(DLL_DIR)/camb.o $(DLL_DIR)/camb_python.o
+	$(DLL_DIR)/camb.o $(DLL_DIR)/camb_python.o $(DLL_DIR)/mgcamb_python.o
 
 #F90CRLINK ?= -lstdc++
 
@@ -92,11 +92,13 @@ $(OUTPUT_DIR)/cmbmain.o: $(OUTPUT_DIR)/lensing.o $(OUTPUT_DIR)/$(NONLINEAR).o $(
 $(OUTPUT_DIR)/camb.o: $(OUTPUT_DIR)/cmbmain.o
 $(OUTPUT_DIR)/Matrix_utils.o: $(OUTPUT_DIR)/utils.o
 
-$(DLL_DIR)/mgcamb.o: $(DLL_DIR)/constants.o $(DLL_DIR)/inifile.o
+
+$(DLL_DIR)/mgcamb_cache.o: $(DLL_DIR)/constants.o $(DLL_DIR)/inifile.o
+$(DLL_DIR)/mgcamb.o: $(DLL_DIR)/constants.o $(DLL_DIR)/inifile.o $(DLL_DIR)/mgcamb_cache.o $(DLL_DIR)/modules.o
 $(DLL_DIR)/subroutines.o: $(DLL_DIR)/constants.o $(DLL_DIR)/utils.o
 $(DLL_DIR)/$(POWERSPECTRUM).o: $(DLL_DIR)/subroutines.o  $(DLL_DIR)/inifile.o
 $(DLL_DIR)/$(RECOMBINATION).o: $(DLL_DIR)/subroutines.o $(DLL_DIR)/inifile.o
-$(DLL_DIR)/$(REIONIZATION).o: $(DLL_DIR)/constants.o $(DLL_DIR)/inifile.o
+$(DLL_DIR)/$(REIONIZATION).o: $(DLL_DIR)/constants.o $(DLL_DIR)/inifile.o $(DLL_DIR)/utils.o
 $(DLL_DIR)/modules.o: $(DLL_DIR)/$(REIONIZATION).o $(DLL_DIR)/$(POWERSPECTRUM).o $(DLL_DIR)/$(RECOMBINATION).o
 $(DLL_DIR)/bessels.o: $(DLL_DIR)/modules.o
 $(DLL_DIR)/$(EQUATIONS).o: $(DLL_DIR)/bessels.o $(DLL_DIR)/mgcamb.o
@@ -107,6 +109,7 @@ $(DLL_DIR)/cmbmain.o: $(DLL_DIR)/lensing.o $(DLL_DIR)/$(NONLINEAR).o $(DLL_DIR)/
 $(DLL_DIR)/camb.o: $(DLL_DIR)/cmbmain.o
 $(DLL_DIR)/Matrix_utils.o: $(DLL_DIR)/utils.o
 $(DLL_DIR)/camb_python.o: $(DLL_DIR)/camb.o
+$(DLL_DIR)/mgcamb_python.o: $(DLL_DIR)/camb.o $(DLL_DIR)/mgcamb.o $(DLL_DIR)/mgcamb_cache.o  
 
 camblib.so: folders $(CAMBSO)
 	$(F90C) $(SF90FLAGS) $(CAMBSO) -o $(DLL_DIR)/camblib.so
