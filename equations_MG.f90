@@ -1523,6 +1523,8 @@
 
     initv=0
 
+
+
     !  Set adiabatic initial conditions
 
     chi=1  !Get transfer function for chi
@@ -1894,7 +1896,7 @@
             grhov_t=grhov*a**(-1-3*w_lam)
         end if
     else
-        call MGCAMB_timestep_cache_nullify( mgcamb_time_cache )
+        !call MGCAMB_timestep_cache_nullify( mgcamb_time_cache )
         call MGCAMB_DarkEnergy( a, CP%mgcamb_par_cache, mgcamb_time_cache )
         grhov_t = mgcamb_time_cache%grhov_t
     end if

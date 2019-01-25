@@ -15,6 +15,7 @@ camb/constants.py
 camb/correlations.py
 camb/initialpower.py
 camb/lensing.py
+camb/mathutils.py
 camb/mgcamb.py
 camb/model.py
 camb/nonlinear.py

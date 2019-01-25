@@ -256,7 +256,7 @@ class CAMBparams(CAMB_Structure):
         ("InitPower", ipow.InitialPowerParams),
         ("mgcamb_flags", mgcamb.MGCAMBFlags),
         ("mgcamb_model_pars", mgcamb.MGCAMBModelParams),
-        ("mgcamb_par_cache", mgcamb.MGCAMB_parameter_cache)
+        ("mgcamb_par_cache", mgcamb.MGCAMB_parameter_cache),
         ("Reion", ion.ReionizationParams),
         ("Recomb", recomb.RecombinationParams),
         ("Transfer", TransferParams),
