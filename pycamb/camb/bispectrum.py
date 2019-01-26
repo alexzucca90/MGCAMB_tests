@@ -1,5 +1,5 @@
 from ctypes import c_int, c_double, c_char
-from .mathutils import threej
+#from .mathutils import threej
 
 # ---Parameters
 Ini_max_string_len = 1024

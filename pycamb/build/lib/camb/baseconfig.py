@@ -17,25 +17,25 @@ mock_load = os.environ.get('READTHEDOCS', None)
 if not mock_load:
     import ctypes
     from ctypes import Structure
-
-
+    
+    
     class ifort_gfortran_loader(ctypes.CDLL):
-
+        
         def __getitem__(self, name_or_ordinal):
             try:
                 res = super(ifort_gfortran_loader, self).__getitem__(name_or_ordinal)
             except:
                 # ifort style exports instead
                 res = super(ifort_gfortran_loader, self).__getitem__(
-                    name_or_ordinal.replace('_MOD_', '_mp_').replace('__', '') + '_')
+                                                                     name_or_ordinal.replace('_MOD_', '_mp_').replace('__', '') + '_')
             return res
-
-
+    
+    
     if not osp.isfile(CAMBL):
         if platform.system() == "Windows":
             # allow local git loading if not installed
             import struct
-
+            
             is32Bit = struct.calcsize("P") == 4
             CAMBL = osp.join(BASEDIR, '..', 'dlls', ('cambdll_x64.dll', DLLNAME)[is32Bit])
         if not osp.isfile(CAMBL):
@@ -47,8 +47,8 @@ else:
         from unittest.mock import MagicMock
     except ImportError:
         from mock import Mock as MagicMock
-
-
+    
+    
     class Mock(MagicMock):
         @classmethod
         def __getattr__(cls, name):
@@ -56,14 +56,14 @@ else:
                 return 1
             else:
                 return Mock()
-
+        
         def __mul__(self, other):
             return Mock()
-
+        
         def __pow__(self, other):
             return 1
-
-
+                
+                
     MOCK_MODULES = ['numpy', 'numpy.ctypeslib', 'ctypes']
     sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
     camblib = Mock()

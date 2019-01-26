@@ -127,7 +127,7 @@ class MGCAMB_parameter_cache(CAMB_Structure):
                 ("h0_Mpc", c_double)
                 ]
 
-    def set_params(self, omegab, omegac, omegav, h0):
+    def set_params(self, omegab=4.6e-2, omegac=2.28e-1, omegav=7.24e-1, h0=7.e1):
         """
             Set the MGCAMB parameter cache
         """

@@ -19,7 +19,7 @@ from .nonlinear import set_halofit_version
 from .model import CAMBparams, TransferParams
 from .reionization import ReionizationParams
 from .initialpower import InitialPowerParams
-from .bispectrum import threej
+#from .bispectrum import threej
 from ctypes import c_int, c_double, c_bool
 
 ThreadNum = dll_import(c_int, "modelparams", "threadnum")
